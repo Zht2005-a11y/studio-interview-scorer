@@ -118,6 +118,8 @@ main{padding:4px 14px 100px}
   font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
 }
 .cand.done .idx{background:#eafaf1;color:var(--good)}
+.cand.lock{opacity:.55}
+.cand.lock:active{transform:none;box-shadow:var(--sh-sm)}
 .cand-name{flex:1;font-size:16.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;padding:5px 12px;border-radius:999px}
 .cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
@@ -295,6 +297,7 @@ main{padding:4px 14px 100px}
   var ME = null;          // { interviewer }（全局面试官名单里的名字，任何组通用）
   var MY = {};            // 我已打的分：candidateName -> { e, w }
   var MYG = null;         // MY 是哪个组里拉的（换组要重新拉）
+  var LOCK = {};          // 面试者已被哪个组评分：candidateId -> 组id（被别的组评过本组就不能再评）
   var CURGROUP = null;    // 当前进入的组
   var VIEW = 'score';     // score | rank
   var RANK = null;       // 统一排名的行
@@ -352,11 +355,14 @@ main{padding:4px 14px 100px}
 
   function loadMine() {
     if (!ME) { MY = {}; return Promise.resolve(); }
-    return api('/api/mine?g=' + encodeURIComponent(CURGROUP) + '&i=' + encodeURIComponent(ME.interviewer))
-      .then(function (j) {
-        MY = {};
-        (j.list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
-      });
+    return Promise.all([
+      api('/api/mine?g=' + encodeURIComponent(CURGROUP) + '&i=' + encodeURIComponent(ME.interviewer)),
+      api('/api/scored')
+    ]).then(function (r) {
+      MY = {};
+      (r[0].list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
+      LOCK = r[1].of || {};
+    });
   }
 
   function render() {
@@ -445,15 +451,19 @@ main{padding:4px 14px 100px}
     main.appendChild(card);
   }
 
-  /* --- 面试者列表（所有组共用一份名单） --- */
+  /* --- 面试者列表（所有组共用一份名单；已被其他组评分的锁定） --- */
   function renderCandidates(g) {
     $('#topSub').textContent = g.name + ' · 面试官 ' + ME.interviewer;
     var main = $('#main'); main.innerHTML = '';
 
+    var lockedOf = function (c) {
+      return LOCK[c.id] && LOCK[c.id] !== g.id ? LOCK[c.id] : null;
+    };
     var cands = CFG.candidates;
-    var total = cands.length;
+    var usable = cands.filter(function (c) { return !lockedOf(c); });
+    var total = usable.length;
     var done = 0;
-    cands.forEach(function (c) { if (MY[c.id]) done++; });
+    usable.forEach(function (c) { if (MY[c.id]) done++; });
 
     var hero = el('div', 'hero');
     hero.innerHTML =
@@ -466,20 +476,30 @@ main{padding:4px 14px 100px}
       '<div class="hero-bar"><i style="width:' + (total ? done / total * 100 : 0) + '%"></i></div>';
     main.appendChild(hero);
 
-    if (!total) {
+    if (!cands.length) {
       main.appendChild(el('div', 'card empty',
         '还没有面试者名单<br><span style="font-size:13px">回到首页，点「面试者名单」添加或批量导入</span>'));
+    } else if (!usable.length) {
+      main.appendChild(el('div', 'card empty',
+        '名单里的面试者都已由其他组评分<br><span style="font-size:13px">可去「排名」页查看各组结果</span>'));
     } else {
       var list = el('div', 'list');
       cands.forEach(function (c, i) {
         var s = MY[c.id];
         var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
-        var row = el('button', 'cand' + (s ? ' done' : ''));
+        var lk = lockedOf(c);
+        var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
+        var row = el('button', 'cand' + (lk ? ' lock' : (s ? ' done' : '')));
         row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
           '<span class="cand-name">' + esc(c.name) +
           (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
-          (s ? '<span class="cand-tag">' + t + ' 分</span>' : '<span class="cand-tag empty">未打分</span>');
-        row.onclick = function () { openSheet(c); };
+          (lk ? '<span class="cand-tag empty">' + esc(lkName) + '已评</span>'
+             : s ? '<span class="cand-tag">' + t + ' 分</span>'
+                : '<span class="cand-tag empty">未打分</span>');
+        row.onclick = function () {
+          if (lk) { toast('「' + c.name + '」已由' + lkName + '评分，本组不能再评'); return; }
+          openSheet(c);
+        };
         list.appendChild(row);
       });
       main.appendChild(list);
@@ -541,6 +561,7 @@ main{padding:4px 14px 100px}
       post('/api/score', { g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
         .then(function () {
           MY[c.id] = { e: pend.e, w: pend.w };
+          LOCK[c.id] = CURGROUP;
           vib(20); hideSheets(); render(); toast('已保存');
           setTimeout(function () {
             var cands = CFG.candidates;
@@ -548,6 +569,7 @@ main{padding:4px 14px 100px}
             cands.forEach(function (cc, i) { if (cc.id === c.id) idx = i; });
             for (var k = 1; k <= cands.length; k++) {
               var nx = cands[(idx + k) % cands.length];
+              if (LOCK[nx.id] && LOCK[nx.id] !== CURGROUP) continue;
               if (!MY[nx.id]) { openSheet(nx); return; }
             }
             toast('本组已全部打分完成');

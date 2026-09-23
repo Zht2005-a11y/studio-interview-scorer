@@ -311,6 +311,13 @@ const server = http.createServer(function (req, res) {
     });
   }
 
+  /* ---- 每位面试者已被哪个组评分（跨组锁定状态） ---- */
+  if (p === '/api/scored' && method === 'GET') {
+    const of = {};
+    scores.forEach(function (s) { if (!of[s.c]) of[s.c] = s.g; });
+    return json(res, 200, { of: of });
+  }
+
   /* ---- 提交打分（同一人重复提交自动覆盖） ---- */
   if (p === '/api/score' && method === 'POST') {
     return readBody(req).then(function (raw) {
@@ -326,6 +333,13 @@ const server = http.createServer(function (req, res) {
       }
       if (!levelOf(CONFIG.expressLevels, d.e)) return json(res, 400, { error: '表达能力等级无效' });
       if (!levelOf(CONFIG.willingLevels, d.w)) return json(res, 400, { error: '意愿等级无效' });
+
+      /* 一位面试者只由一个组评分：已被其他组评过、本组还没评过的，拒绝 */
+      const other = scores.find(function (s) { return s.c === d.c && s.g !== d.g; });
+      if (other && !scores.some(function (s) { return s.c === d.c && s.g === d.g; })) {
+        const og = findGroup(other.g);
+        return json(res, 400, { error: '该面试者已由「' + (og ? og.name : '其他组') + '」评分，其他组不能再评' });
+      }
 
       const old = scores.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
       if (old) { old.e = d.e; old.w = d.w; }
