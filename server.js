@@ -129,6 +129,56 @@ function levelOf(levels, key) {
   return (levels || []).find(function (l) { return l.key === key; }) || null;
 }
 
+/* ---------- 排名（旧版按组格式，仅用于兼容还没刷新缓存的旧页面） ---------- */
+function rankOf(group) {
+  const rows = CONFIG.candidates.map(function (c) {
+    const detail = scores
+      .filter(function (s) { return s.g === group.id && s.c === c.id; })
+      .map(function (s) {
+        const e = levelOf(CONFIG.expressLevels, s.e);
+        const w = levelOf(CONFIG.willingLevels, s.w);
+        if (!e || !w) return null;
+        return {
+          interviewer: s.i,
+          expressLabel: e.label, expressScore: e.score,
+          willingLabel: w.label, willingScore: w.score,
+          total: e.score + w.score
+        };
+      })
+      .filter(Boolean)
+      .sort(function (a, b) { return a.interviewer.localeCompare(b.interviewer, 'zh'); });
+
+    const n = detail.length;
+    let sum = 0;
+    detail.forEach(function (d) { sum += d.total; });
+
+    return {
+      id: c.id,
+      name: c.name,
+      cls: c.cls,
+      count: n,
+      total: group.interviewers.length,
+      avg: n ? Math.round(sum / n * 100) / 100 : null,
+      detail: detail
+    };
+  });
+
+  const done = rows.filter(function (r) { return r.count > 0; })
+    .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
+  const todo = rows.filter(function (r) { return r.count === 0; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
+
+  const out = done.concat(todo);
+  let last = null, lastRank = 0;
+  out.forEach(function (r, i) {
+    if (r.count === 0) { r.rank = null; return; }
+    if (last !== null && r.avg === last) { r.rank = lastRank; }
+    else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
+  });
+
+  return { groupId: group.id, groupName: group.name, rows: out };
+}
+
 /* ---------- 排名：小组只是分场面试，所有组的打分合并成一份统一排名 ---------- */
 function unifiedRank() {
   const rows = CONFIG.candidates.map(function (c) {
@@ -234,7 +284,8 @@ const server = http.createServer(function (req, res) {
     const file = path.join(PUBLIC_DIR, rel);
     return fs.readFile(file, function (err, buf) {
       if (err) return text(res, 404, 'Not Found');
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream' });
+      // 禁止缓存：否则部署新版后，手机上残留的旧页面会拿旧字段请求新接口
+      res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' });
       res.end(buf);
     });
   }
@@ -285,9 +336,9 @@ const server = http.createServer(function (req, res) {
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 
-  /* ---- 排名（所有组合并的统一排名） ---- */
+  /* ---- 排名（rows 给新版页面；groups 兼容还没刷新缓存的旧版页面） ---- */
   if (p === '/api/rank' && method === 'GET') {
-    return json(res, 200, unifiedRank());
+    return json(res, 200, { rows: unifiedRank().rows, groups: CONFIG.groups.map(rankOf) });
   }
 
   /* ---- 管理名单 ----
