@@ -233,20 +233,20 @@ main{padding:4px 14px 100px}
 }
 .tag i:active{background:#fda29b;color:#fff}
 
-/* ---------- 首页正方形入口 ---------- */
+/* ---------- 首页快捷入口 ---------- */
 .entry-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
 .sq{
-  aspect-ratio:1/1;border-radius:20px;background:var(--card);box-shadow:var(--sh-sm);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
-  padding:10px;text-align:center;transition:.16s;
+  display:flex;align-items:center;gap:11px;background:var(--card);box-shadow:var(--sh-sm);
+  border-radius:16px;padding:13px 14px;text-align:left;transition:.16s;min-width:0;
 }
 .sq:active{transform:scale(.97);box-shadow:var(--sh)}
-.sq-ic{width:46px;height:46px;border-radius:15px;display:flex;align-items:center;justify-content:center;color:#fff}
-.sq-ic svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.sq.grp .sq-ic{background:linear-gradient(135deg,#4a6cf7,#6b5cff);box-shadow:0 6px 14px rgba(74,108,247,.3)}
-.sq.cand .sq-ic{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 14px rgba(18,183,106,.3)}
-.sq b{font-size:15.5px;font-weight:700;letter-spacing:-.2px}
-.sq span{font-size:12px;color:var(--ink3);line-height:1.4}
+.sq-ic{flex:none;width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff}
+.sq-ic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sq.grp .sq-ic{background:linear-gradient(135deg,#4a6cf7,#6b5cff);box-shadow:0 4px 10px rgba(74,108,247,.28)}
+.sq.cand .sq-ic{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 4px 10px rgba(18,183,106,.28)}
+.sq-tx{flex:1;min-width:0}
+.sq b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.sq span{display:block;font-size:11px;color:var(--ink3);line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- 面试者名单（首页入口 + 批量导入） ---------- */
 .pl-del{
@@ -401,11 +401,11 @@ main{padding:4px 14px 100px}
     var row = el('div', 'entry-row');
     var sqG = el('button', 'sq grp',
       '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>' +
-      '<b>创建组</b><span>新建面试组<br>管理各组面试官</span>');
+      '<span class="sq-tx"><b>创建组</b><span>新建组 · 管理面试官</span></span>');
     sqG.onclick = function () { vib(); openManage(); };
     var sqC = el('button', 'sq cand',
       '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>' +
-      '<b>添加面试者</b><span>单个 / 批量导入<br>查看名单（共 ' + CFG.candidates.length + ' 人）</span>');
+      '<span class="sq-tx"><b>添加面试者</b><span>单个 / 批量 · 共 ' + CFG.candidates.length + ' 人</span></span>');
     sqC.onclick = function () { vib(); openCands(); };
     row.appendChild(sqG);
     row.appendChild(sqC);
