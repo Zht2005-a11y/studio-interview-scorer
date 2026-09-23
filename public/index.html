@@ -236,17 +236,18 @@ main{padding:4px 14px 100px}
 /* ---------- 首页快捷入口 ---------- */
 .entry-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
 .sq{
-  display:flex;align-items:center;gap:11px;background:var(--card);box-shadow:var(--sh-sm);
-  border-radius:16px;padding:13px 14px;text-align:left;transition:.16s;min-width:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  background:var(--card);box-shadow:var(--sh-sm);border-radius:16px;
+  padding:13px 8px;text-align:center;transition:.16s;min-width:0;
 }
 .sq:active{transform:scale(.97);box-shadow:var(--sh)}
-.sq-ic{flex:none;width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff}
-.sq-ic svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sq-ic{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff}
+.sq-ic svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .sq.grp .sq-ic{background:linear-gradient(135deg,#4a6cf7,#6b5cff);box-shadow:0 4px 10px rgba(74,108,247,.28)}
 .sq.cand .sq-ic{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 4px 10px rgba(18,183,106,.28)}
-.sq-tx{flex:1;min-width:0}
-.sq b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
-.sq span{display:block;font-size:11px;color:var(--ink3);line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sq-tx{min-width:0}
+.sq b{display:block;font-size:13.5px;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.sq span{display:block;font-size:10.5px;color:var(--ink3);line-height:1.4;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- 面试者名单（首页入口 + 批量导入） ---------- */
 .pl-del{
