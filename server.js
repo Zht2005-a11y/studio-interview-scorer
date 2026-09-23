@@ -129,11 +129,11 @@ function levelOf(levels, key) {
   return (levels || []).find(function (l) { return l.key === key; }) || null;
 }
 
-/* ---------- 排名：全局名单按同组所有面试官打分的平均分 ---------- */
-function rankOf(group) {
+/* ---------- 排名：小组只是分场面试，所有组的打分合并成一份统一排名 ---------- */
+function unifiedRank() {
   const rows = CONFIG.candidates.map(function (c) {
-    const detail = scores
-      .filter(function (s) { return s.g === group.id && s.c === c.id; })
+    const mine = scores.filter(function (s) { return s.c === c.id; });
+    const detail = mine
       .map(function (s) {
         const e = levelOf(CONFIG.expressLevels, s.e);
         const w = levelOf(CONFIG.willingLevels, s.w);
@@ -148,6 +148,19 @@ function rankOf(group) {
       .filter(Boolean)
       .sort(function (a, b) { return a.interviewer.localeCompare(b.interviewer, 'zh'); });
 
+    // 这位面试者是哪个组面试的（正常只有一个组；万一多个组都评过，total 不再准确）
+    const gids = [];
+    mine.forEach(function (s) { if (gids.indexOf(s.g) < 0) gids.push(s.g); });
+    let total = null;
+    if (gids.length === 1) {
+      const g0 = findGroup(gids[0]);
+      total = g0 ? g0.interviewers.length : null;
+    }
+    const groupNames = gids.map(function (gid) {
+      const g0 = findGroup(gid);
+      return g0 ? g0.name : '';
+    }).filter(Boolean);
+
     const n = detail.length;
     let sum = 0;
     detail.forEach(function (d) { sum += d.total; });
@@ -157,7 +170,8 @@ function rankOf(group) {
       name: c.name,
       cls: c.cls,
       count: n,
-      total: group.interviewers.length,
+      total: total,
+      groups: groupNames,
       avg: n ? Math.round(sum / n * 100) / 100 : null,
       detail: detail
     };
@@ -176,7 +190,7 @@ function rankOf(group) {
     else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
   });
 
-  return { groupId: group.id, groupName: group.name, rows: out };
+  return { rows: out };
 }
 
 /* ---------- HTTP ---------- */
@@ -271,9 +285,9 @@ const server = http.createServer(function (req, res) {
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 
-  /* ---- 排名 ---- */
+  /* ---- 排名（所有组合并的统一排名） ---- */
   if (p === '/api/rank' && method === 'GET') {
-    return json(res, 200, { groups: CONFIG.groups.map(rankOf) });
+    return json(res, 200, unifiedRank());
   }
 
   /* ---- 管理名单 ----

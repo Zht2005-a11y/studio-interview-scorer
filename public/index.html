@@ -296,7 +296,7 @@ main{padding:4px 14px 100px}
   var MY = {};            // 我已打的分：candidateName -> { e, w }
   var CURGROUP = null;    // 当前进入的组
   var VIEW = 'score';     // score | rank
-  var RANK = null, RANKG = null;
+  var RANK = null;       // 统一排名的行
   var MG = null;          // 管理弹层里选中的组
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
@@ -632,20 +632,16 @@ main{padding:4px 14px 100px}
     }).catch(function (e) { toast(e.message); throw e; });
   }
 
-  /* ================= 排名页 ================= */
+  /* ================= 排名页（所有组合并的统一排名） ================= */
   function renderRank() {
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = '平均分排名';
-    $('#topSub').textContent = '按同组所有面试官的平均分排序';
+    $('#topSub').textContent = '小组只是分场面试 · 全部组统一排名';
     main.appendChild(el('div', 'card hint', '加载中…'));
 
     api('/api/rank').then(function (j) {
-      RANK = j.groups || [];
-      if (!RANK.length) { main.innerHTML = ''; main.appendChild(el('div', 'card hint', '还没有组。')); return; }
-      var ok = false;
-      RANK.forEach(function (g) { if (g.groupId === RANKG) ok = true; });
-      if (!ok) RANKG = RANK[0].groupId;
+      RANK = j.rows || [];
       paintRank();
     }).catch(function (e) {
       main.innerHTML = '';
@@ -656,26 +652,16 @@ main{padding:4px 14px 100px}
   function paintRank() {
     var main = $('#main'); main.innerHTML = '';
 
-    var wrap = el('div', 'chip-wrap'); wrap.style.marginBottom = '14px';
-    RANK.forEach(function (g) {
-      var b = el('button', 'chip' + (RANKG === g.groupId ? ' on' : ''), esc(g.groupName));
-      b.onclick = function () { RANKG = g.groupId; paintRank(); };
-      wrap.appendChild(b);
-    });
-    main.appendChild(wrap);
-
-    var cur = RANK.filter(function (g) { return g.groupId === RANKG; })[0];
-    if (!cur) return;
-
-    if (!cur.rows.length) {
+    if (!RANK.length) {
       main.appendChild(el('div', 'card empty', '还没有面试者名单<br><span style="font-size:13px">到首页「面试者名单」里添加</span>'));
       return;
     }
     var any = false;
-    cur.rows.forEach(function (r) { if (r.count > 0) any = true; });
-    if (!any) { main.appendChild(el('div', 'card empty', '本组还没有人打分')); return; }
+    RANK.forEach(function (r) { if (r.count > 0) any = true; });
+    if (!any) { main.appendChild(el('div', 'card empty', '还没有人打分')); return; }
 
-    cur.rows.forEach(function (r) {
+    RANK.forEach(function (r) {
+      var by = (r.groups && r.groups.length) ? ' · ' + esc(r.groups.join('、')) : '';
       if (r.count === 0) {
         var e2 = el('div', 'rank-row');
         e2.innerHTML = '<div class="medal">—</div><div class="rank-main">' +
@@ -685,11 +671,12 @@ main{padding:4px 14px 100px}
         return;
       }
       var cls = r.rank === 1 ? ' m1' : r.rank === 2 ? ' m2' : r.rank === 3 ? ' m3' : '';
+      var sub = (r.total != null ? r.count + '/' + r.total : r.count + '') + ' 位面试官已打分' + by + ' · 点击看明细';
       var row = el('button', 'rank-row');
       row.innerHTML = '<div class="medal' + cls + '">' + r.rank + '</div>' +
         '<div class="rank-main"><div class="rank-name">' + esc(r.name) +
         (r.cls ? '<em class="c-cls">' + esc(r.cls) + '</em>' : '') + '</div>' +
-        '<div class="rank-sub">' + r.count + '/' + r.total + ' 位面试官已打分 · 点击看明细</div></div>' +
+        '<div class="rank-sub">' + sub + '</div></div>' +
         '<div class="rank-score"><b>' + r.avg + '</b><span>平均分</span></div>';
 
       var detail = el('div', 'rank-detail');
