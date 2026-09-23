@@ -286,9 +286,6 @@ main{padding:4px 14px 100px}
     <div class="appbar-title" id="topTitle">面试打分</div>
     <div class="appbar-sub" id="topSub"></div>
   </div>
-  <button class="icon-btn" id="manageBtn" title="面试组管理">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  </button>
 </header>
 
 <main id="main"></main>
@@ -301,6 +298,10 @@ main{padding:4px 14px 100px}
   <button id="navRank">
     <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>
     排名
+  </button>
+  <button id="navIv">
+    <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    面试官
   </button>
 </nav>
 
@@ -317,9 +318,8 @@ main{padding:4px 14px 100px}
   var MY = {};            // 我已打的分：candidateId -> { e, w }
   var LOCK = {};          // 面试者已被哪个组评分：candidateId -> groupId
   var CURGROUP = null;    // 当前进入的组
-  var VIEW = 'score';     // score | rank
+  var VIEW = 'score';     // score | rank | iv
   var RANK = null, RANKG = null;
-  var MG = null;          // 管理弹层里选中的组
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
 
@@ -387,7 +387,9 @@ main{padding:4px 14px 100px}
   function render() {
     $('#navScore').className = VIEW === 'score' ? 'on' : '';
     $('#navRank').className = VIEW === 'rank' ? 'on' : '';
+    $('#navIv').className = VIEW === 'iv' ? 'on' : '';
     if (VIEW === 'rank') return renderRank();
+    if (VIEW === 'iv') return renderIv();
     if (!CURGROUP) return renderGroups();
     return renderGroup();
   }
@@ -402,7 +404,7 @@ main{padding:4px 14px 100px}
     var row = el('div', 'entry-row');
     var sqG = el('button', 'sq grp',
       '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>' +
-      '<span class="sq-tx"><b>创建组</b><span>新建组 · 管理面试官</span></span>');
+      '<span class="sq-tx"><b>创建组</b><span>新建面试组</span></span>');
     sqG.onclick = function () { vib(); openManage(); };
     var sqC = el('button', 'sq cand',
       '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>' +
@@ -445,7 +447,7 @@ main{padding:4px 14px 100px}
 
     if (!g.interviewers.length) {
       main.appendChild(el('div', 'card hint warn',
-        '「' + esc(g.name) + '」还没有面试官，到首页「创建组」里为它添加。'));
+        '「' + esc(g.name) + '」还没有面试官，到「面试官」里为它添加。'));
       return;
     }
 
@@ -704,6 +706,68 @@ main{padding:4px 14px 100px}
     }).catch(function (e) { toast(e.message); throw e; });
   }
 
+  /* ================= 面试官页（按组增删） ================= */
+  var IVG = null; // 面试官页选中的组
+
+  function renderIv() {
+    var main = $('#main'); main.innerHTML = '';
+    $('#backBtn').hidden = true;
+    $('#topTitle').textContent = '面试官';
+    $('#topSub').textContent = '选择组，配置该组的面试官';
+
+    if (!CFG.groups.length) {
+      main.appendChild(el('div', 'card hint warn', '还没有面试组。去「打分」首页点「创建组」先建一个。'));
+      return;
+    }
+    if (!IVG || !groupById(IVG)) {
+      IVG = (CURGROUP && groupById(CURGROUP)) ? CURGROUP : CFG.groups[0].id;
+    }
+
+    var wrap = el('div', 'chip-wrap'); wrap.style.marginBottom = '14px';
+    CFG.groups.forEach(function (g) {
+      var b = el('button', 'chip' + (IVG === g.id ? ' on' : ''), esc(g.name) + ' ' + g.interviewers.length);
+      b.onclick = function () { vib(); IVG = g.id; renderIv(); };
+      wrap.appendChild(b);
+    });
+    main.appendChild(wrap);
+
+    var g = groupById(IVG);
+    var card = el('div', 'card');
+    card.appendChild(el('div', 'card-title', g.name + ' · ' + g.interviewers.length + ' 位面试官'));
+
+    var row = el('div', 'add-row',
+      '<input id="ivName" maxlength="20" placeholder="输入面试官姓名"><button id="ivAdd">添加</button>');
+    card.appendChild(row);
+
+    var box = el('div', 'chip-wrap'); box.style.marginTop = '12px';
+    if (!g.interviewers.length) {
+      box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加，输入姓名点「添加」</span>';
+    } else {
+      g.interviewers.forEach(function (n) {
+        var t = el('span', 'tag', esc(n) + '<i>×</i>');
+        t.querySelector('i').onclick = function () {
+          if (!confirm('把「' + n + '」从' + g.name + '移除？\n他/她的打分记录也会一并删除。')) return;
+          manage(IVG, 'iv', n, 'del');
+        };
+        box.appendChild(t);
+      });
+    }
+    card.appendChild(box);
+    main.appendChild(card);
+
+    var inp = row.querySelector('#ivName');
+    function add() {
+      var v = inp.value.trim();
+      if (!v) return;
+      manage(IVG, 'iv', v, 'add').then(function () {
+        var i2 = $('#ivName');
+        if (i2) i2.focus();
+      });
+    }
+    row.querySelector('#ivAdd').onclick = add;
+    inp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
+  }
+
   /* ================= 排名页 ================= */
   function renderRank() {
     var main = $('#main'); main.innerHTML = '';
@@ -777,26 +841,22 @@ main{padding:4px 14px 100px}
     });
   }
 
-  /* ================= 管理面试官 ================= */
+  /* ================= 创建组（首页入口） ================= */
   function openManage() {
-    MG = CURGROUP || MG || CFG.groups[0].id;
     paintManage();
     showSheet('#msheet');
   }
 
-  /* ================= 面试组管理（创建组 / 编辑各组面试官） ================= */
   function paintManage() {
     var sheet = $('#msheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">面试组管理</div>' +
-      '<div class="sheet-sub">创建新组，或选择一个组增删面试官</div></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">创建组</div>' +
+      '<div class="sheet-sub">输入组名即可新建，建好后在底部「面试官」里配置面试官</div></div>' +
       '<button class="sheet-close" id="mClose">关闭</button></div>' +
-      '<div class="m-sec"><div class="grade-label">创建新组</div>' +
+      '<div class="m-sec"><div class="grade-label">新建面试组</div>' +
         '<div class="add-row"><input id="mNewG" maxlength="20" placeholder="组名，如 第5组"><button id="mNewAdd">创建</button></div></div>' +
-      '<div class="m-sec"><div class="grade-label">选择组</div><div class="chip-wrap" id="mGroups"></div></div>' +
-      '<div class="m-sec"><div class="grade-label" id="mIvLabel">面试官（点 × 移除）</div>' +
-        '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
-        '<div class="chip-wrap" id="mIvList"></div></div>';
+      '<div class="m-sec"><div class="grade-label">已有面试组（' + CFG.groups.length + '）</div>' +
+        '<div class="chip-wrap" id="mGroups"></div></div>';
 
     $('#mClose').onclick = hideSheets;
 
@@ -811,45 +871,16 @@ main{padding:4px 14px 100px}
 
     var gWrap = $('#mGroups');
     CFG.groups.forEach(function (g) {
-      var b = el('button', 'chip' + (MG === g.id ? ' on' : ''), esc(g.name));
-      b.onclick = function () { MG = g.id; paintManage(); };
-      gWrap.appendChild(b);
+      gWrap.appendChild(el('span', 'tag', esc(g.name) +
+        '<i style="background:none;width:auto;padding:0 2px;font-size:12px">' + g.interviewers.length + ' 人</i>'));
     });
-
-    var g = groupById(MG);
-    $('#mIvLabel').textContent = (g ? g.name : '') + ' · 面试官（点 × 移除）';
-    var box = $('#mIvList');
-    if (!g.interviewers.length) {
-      box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
-    } else {
-      g.interviewers.forEach(function (n) {
-        var t = el('span', 'tag', esc(n) + '<i>×</i>');
-        t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + n + '」从' + g.name + '移除？\n他/她的打分记录也会一并删除。')) return;
-          manage(MG, 'iv', n, 'del').then(paintManage);
-        };
-        box.appendChild(t);
-      });
-    }
-
-    var inp = $('#mIv');
-    function add() {
-      var v = inp.value.trim();
-      if (!v) return;
-      manage(MG, 'iv', v, 'add').then(function () { inp.value = ''; inp.focus(); paintManage(); });
-    }
-    $('#mIvAdd').onclick = add;
-    inp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
   }
 
   function gpManage(name) {
     return post('/api/manage', { kind: 'gp', op: 'add', name: name })
       .then(function (j) {
         CFG.groups = j.groups;
-        vib(18); toast('已创建「' + name + '」');
-        for (var i = 0; i < CFG.groups.length; i++) {
-          if (CFG.groups[i].name === name) MG = CFG.groups[i].id;
-        }
+        vib(18); toast('已创建「' + name + '」，去「面试官」配置面试官');
         if (VIEW === 'rank') renderRank(); else render();
         paintManage();
         return j;
@@ -893,8 +924,8 @@ main{padding:4px 14px 100px}
   /* ================= 交互 ================= */
   $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
   $('#navRank').onclick = function () { VIEW = 'rank'; hideSheets(); render(); };
+  $('#navIv').onclick = function () { VIEW = 'iv'; hideSheets(); render(); };
   $('#backBtn').onclick = function () { CURGROUP = null; hideSheets(); render(); };
-  $('#manageBtn').onclick = function () { openManage(); };
 
   boot();
 })();
