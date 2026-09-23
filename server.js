@@ -4,8 +4,9 @@
  * 工作室面试打分系统
  * 启动：node server.js        换端口：PORT=8080 node server.js
  *
- * 组：在 App 首页「创建组」里新建；面试官也在那里按组增删（右上角齿轮同入口）。
- * 面试者（班级 + 姓名，所有组共用）：在 App 首页「添加面试者」里添加、批量导入、删除。
+ * 组：在 App 首页「创建组」里新建，组只区分打分场次。
+ * 面试官（全局一份名单）：底部「面试官」页里增删，任何面试官可进任何组打分。
+ * 面试者（班级 + 姓名，全局共用）：在 App 首页「添加面试者」里添加、批量导入、删除。
  */
 
 /* ============ 初始名单（只在 data/config.json 不存在时使用） ============ */
@@ -26,14 +27,18 @@ const SEED = {
     { key: 'high', label: '意愿强',   score: 90 }
   ],
 
-  // 所有组共用的面试者名单：[{ id, name, cls }]，在首页「面试者名单」里维护
+  // 所有组共用的面试官名单（底部「面试官」页维护）
+  interviewers: ['张洪涛', '张加美', '田丹', '冉娟', '申宇轩', '黄红强', '付博',
+                 '陈英开', '陈明峰', '骆丹', '马运福', '刘院明', '谌艳'],
+
+  // 所有组共用的面试者名单：[{ id, name, cls }]，在首页「添加面试者」里维护
   candidates: [],
 
   groups: [
-    { id: 'g1', name: '第1组', interviewers: ['张洪涛', '张加美', '田丹', '冉娟'] },
-    { id: 'g2', name: '第2组', interviewers: ['申宇轩', '黄红强', '付博'] },
-    { id: 'g3', name: '第3组', interviewers: ['陈英开', '陈明峰', '骆丹'] },
-    { id: 'g4', name: '第4组', interviewers: ['马运福', '刘院明', '谌艳'] }
+    { id: 'g1', name: '第1组' },
+    { id: 'g2', name: '第2组' },
+    { id: 'g3', name: '第3组' },
+    { id: 'g4', name: '第4组' }
   ]
 };
 
@@ -65,9 +70,15 @@ function writeJSON(file, obj) {
 
 /* ---------- 名单：首次启动用 SEED 生成，之后由 App 维护 ---------- */
 
-/* 统一成规范结构：面试官是字符串数组；面试者是全局共用的 { id, name, cls }，
-   id 用于关联打分记录，改班级/姓名不会丢分 */
+/* 统一成规范结构：面试官和面试者都是全局名单，
+   面试官是字符串数组，面试者是 { id, name, cls }（id 关联打分记录，改名不丢分） */
 function normalize(cfg) {
+  const iv = [], seenIv = Object.create(null);
+  function takeIv(n) {
+    const v = str(n);
+    if (v && !seenIv[v]) { seenIv[v] = 1; iv.push(v); }
+  }
+
   const cd = [];
   const seenCd = Object.create(null);
   function takeCd(c) {
@@ -80,19 +91,16 @@ function normalize(cfg) {
     cd.push({ id: o.id || uid(), name: o.name, cls: o.cls });
   }
 
-  // 旧版把面试者挂在各个组里，这里并入全局名单
+  // 旧版把面试官/面试者挂在各个组里，这里并入全局名单
   (cfg.groups || []).forEach(function (g) {
-    const iv = [], seenIv = Object.create(null);
-    (Array.isArray(g.interviewers) ? g.interviewers : []).forEach(function (n) {
-      const v = str(n);
-      if (v && !seenIv[v]) { seenIv[v] = 1; iv.push(v); }
-    });
-    g.interviewers = iv;
-
+    (Array.isArray(g.interviewers) ? g.interviewers : []).forEach(takeIv);
+    delete g.interviewers;
     (Array.isArray(g.candidates) ? g.candidates : []).forEach(takeCd);
     delete g.candidates;
   });
+  (Array.isArray(cfg.interviewers) ? cfg.interviewers : []).forEach(takeIv);
   (Array.isArray(cfg.candidates) ? cfg.candidates : []).forEach(takeCd);
+  cfg.interviewers = iv;
   cfg.candidates = cd;
   return cfg;
 }
@@ -157,7 +165,7 @@ function rankOf(group) {
       name: c.name,
       cls: c.cls,
       count: n,
-      total: group.interviewers.length,
+      total: CONFIG.interviewers.length,
       avg: n ? Math.round(sum / n * 100) / 100 : null,
       detail: detail
     };
@@ -231,6 +239,7 @@ const server = http.createServer(function (req, res) {
       title: CONFIG.title,
       expressLevels: CONFIG.expressLevels,
       willingLevels: CONFIG.willingLevels,
+      interviewers: CONFIG.interviewers,
       candidates: CONFIG.candidates,
       groups: CONFIG.groups
     });
@@ -262,8 +271,8 @@ const server = http.createServer(function (req, res) {
 
       const g = findGroup(d.g);
       if (!g) return json(res, 400, { error: '组不存在' });
-      if (!g.interviewers.length) return json(res, 400, { error: '该组还没有面试官' });
-      if (g.interviewers.indexOf(d.i) < 0) return json(res, 400, { error: '面试官不在该组名单中' });
+      if (!CONFIG.interviewers.length) return json(res, 400, { error: '还没有面试官，先到「面试官」里添加' });
+      if (CONFIG.interviewers.indexOf(d.i) < 0) return json(res, 400, { error: '面试官不在名单中' });
       if (!CONFIG.candidates.some(function (c) { return c.id === d.c; })) {
         return json(res, 400, { error: '面试者不在名单中' });
       }
@@ -292,10 +301,10 @@ const server = http.createServer(function (req, res) {
 
   /* ---- 管理名单 ----
      面试组：{ kind:'gp', op:'add', name }
-     面试官（按组）：{ g, kind:'iv', op:'add'|'del', name }
-     面试者（全局共用）：{ kind:'cd', op:'add', name, cls }
-                        { kind:'cd', op:'del', id }
-                        { kind:'cd', op:'batch', items:[{name,cls}, ...] }   */
+     面试官（全局）：{ kind:'iv', op:'add'|'del', name }
+     面试者（全局）：{ kind:'cd', op:'add', name, cls }
+                     { kind:'cd', op:'del', id }
+                     { kind:'cd', op:'batch', items:[{name,cls}, ...] }   */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
       let d;
@@ -310,35 +319,32 @@ const server = http.createServer(function (req, res) {
         if (CONFIG.groups.some(function (g) { return g.name === name; })) {
           return json(res, 400, { error: '「' + name + '」已经存在了' });
         }
-        CONFIG.groups.push({ id: uid(), name: name, interviewers: [] });
+        CONFIG.groups.push({ id: uid(), name: name });
         writeJSON(CONFIG_FILE, CONFIG);
         return json(res, 200, { ok: true, groups: CONFIG.groups });
       }
 
-      /* --- 面试官（按组维护） --- */
+      /* --- 面试官：全局名单 --- */
       if (d.kind === 'iv') {
-        const g = findGroup(d.g);
-        if (!g) return json(res, 400, { error: '组不存在' });
-
         const name = str(d.name);
         if (!name) return json(res, 400, { error: '名字不能为空' });
         if (name.length > 20) return json(res, 400, { error: '名字太长了' });
 
         if (d.op === 'add') {
-          if (g.interviewers.indexOf(name) >= 0) return json(res, 400, { error: '「' + name + '」已经在名单里了' });
-          g.interviewers.push(name);
+          if (CONFIG.interviewers.indexOf(name) >= 0) return json(res, 400, { error: '「' + name + '」已经在名单里了' });
+          CONFIG.interviewers.push(name);
         } else if (d.op === 'del') {
-          const idx = g.interviewers.indexOf(name);
+          const idx = CONFIG.interviewers.indexOf(name);
           if (idx < 0) return json(res, 400, { error: '名单里没有这个名字' });
-          g.interviewers.splice(idx, 1);
-          // 同步清掉相关打分，避免残留分数干扰排名
-          scores = scores.filter(function (s) { return !(s.g === g.id && s.i === name); });
+          CONFIG.interviewers.splice(idx, 1);
+          // 同步清掉此人在所有组的打分
+          scores = scores.filter(function (s) { return s.i !== name; });
           writeJSON(SCORES_FILE, scores);
         } else {
           return json(res, 400, { error: '操作错误' });
         }
         writeJSON(CONFIG_FILE, CONFIG);
-        return json(res, 200, { ok: true, groups: CONFIG.groups });
+        return json(res, 200, { ok: true, interviewers: CONFIG.interviewers });
       }
 
       /* --- 面试者：所有组共用一份名单 --- */
