@@ -259,9 +259,23 @@ const server = http.createServer(function (req, res) {
   return json(res, 404, { error: '接口不存在' });
 });
 
+server.on('error', function (e) {
+  if (e && e.code === 'EADDRINUSE') {
+    console.error('');
+    console.error('  端口 ' + PORT + ' 已被占用。');
+    console.error('  换个端口再启动，例如：');
+    console.error('    PORT=8080 node server.js');
+    console.error('');
+  } else {
+    console.error(e);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, '0.0.0.0', function () {
   console.log('');
   console.log('  工作室面试打分系统已启动');
+  console.log('  监听端口：' + PORT);
   console.log('  手机访问：http://<服务器IP>:' + PORT + '/');
   console.log('');
 });
