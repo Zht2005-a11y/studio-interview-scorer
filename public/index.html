@@ -292,12 +292,12 @@ main{padding:4px 14px 100px}
 <script>
 (function () {
   var CFG = null;
-  var ME = null;          // { groupId, interviewer }
+  var ME = null;          // { interviewer }（全局面试官名单里的名字，任何组通用）
   var MY = {};            // 我已打的分：candidateName -> { e, w }
+  var MYG = null;         // MY 是哪个组里拉的（换组要重新拉）
   var CURGROUP = null;    // 当前进入的组
   var VIEW = 'score';     // score | rank
   var RANK = null;       // 统一排名的行
-  var MG = null;          // 管理弹层里选中的组
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
 
@@ -327,7 +327,7 @@ main{padding:4px 14px 100px}
   function groupById(id) { for (var i = 0; i < CFG.groups.length; i++) if (CFG.groups[i].id === id) return CFG.groups[i]; return null; }
   function scoreOf(lv, k) { for (var i = 0; i < lv.length; i++) if (lv[i].key === k) return lv[i].score; return 0; }
   function saveME() { try { localStorage.setItem(LS_KEY, JSON.stringify(ME)); } catch (e) {} }
-  function identityOK(g) { return !!(ME && g && ME.groupId === g.id && g.interviewers.indexOf(ME.interviewer) >= 0); }
+  function meOK() { return !!(ME && CFG.interviewers.indexOf(ME.interviewer) >= 0); }
 
   /* ================= 启动 ================= */
   function boot() {
@@ -339,11 +339,11 @@ main{padding:4px 14px 100px}
       var gid = q.get('g') || (saved && saved.groupId) || '';
       var nm = q.get('n') || (saved && saved.interviewer) || '';
       var g = groupById(gid);
-      if (g && g.interviewers.indexOf(nm) >= 0) {
-        ME = { groupId: gid, interviewer: nm };
+      if (nm && CFG.interviewers.indexOf(nm) >= 0) {
+        ME = { interviewer: nm };
         saveME();
-        CURGROUP = gid;
-        loadMine().then(render, render);
+        CURGROUP = g ? gid : null;
+        if (CURGROUP) loadMine().then(render, render); else render();
       } else render();
     }).catch(function (e) {
       $('#main').innerHTML = '<div class="card hint warn">加载失败：' + esc(e.message) + '<br>请确认服务已启动。</div>';
@@ -352,7 +352,7 @@ main{padding:4px 14px 100px}
 
   function loadMine() {
     if (!ME) { MY = {}; return Promise.resolve(); }
-    return api('/api/mine?g=' + encodeURIComponent(ME.groupId) + '&i=' + encodeURIComponent(ME.interviewer))
+    return api('/api/mine?g=' + encodeURIComponent(CURGROUP) + '&i=' + encodeURIComponent(ME.interviewer))
       .then(function (j) {
         MY = {};
         (j.list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
@@ -389,7 +389,7 @@ main{padding:4px 14px 100px}
       card.innerHTML =
         '<span class="gbadge">' + (i + 1) + '</span>' +
         '<span class="gmain"><span class="gname">' + esc(g.name) + '</span>' +
-        '<span class="gmeta">' + g.interviewers.length + ' 位面试官 · 全组共用名单</span></span>' +
+        '<span class="gmeta">进入打分 · 面试官 ' + CFG.interviewers.length + ' 人共用</span></span>' +
         '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
       card.onclick = function () { vib(); CURGROUP = g.id; render(); };
       list.appendChild(card);
@@ -405,36 +405,43 @@ main{padding:4px 14px 100px}
     $('#backBtn').hidden = false;
     $('#topTitle').textContent = g.name;
 
-    if (!identityOK(g)) return renderPickIdentity(g);
+    if (!meOK()) return renderPickIdentity(g);
+    if (MYG !== g.id) {
+      // 换到另一个组，重新拉这个组里我打的分
+      MYG = g.id;
+      return loadMine().then(function () { renderCandidates(g); },
+                              function () { renderCandidates(g); });
+    }
     renderCandidates(g);
   }
 
-  /* --- 选一次自己是谁 --- */
+  /* --- 选一次自己是谁（全局名单，任何组通用） --- */
   function renderPickIdentity(g) {
     $('#topSub').textContent = '请选择你是哪位面试官';
     var main = $('#main'); main.innerHTML = '';
 
-    if (!g.interviewers.length) {
+    if (!CFG.interviewers.length) {
       main.appendChild(el('div', 'card hint warn',
-        '「' + esc(g.name) + '」还没有面试官，点右上角齿轮添加。'));
+        '还没有面试官，点右上角齿轮添加。'));
       return;
     }
 
     var card = el('div', 'card');
     card.appendChild(el('div', 'card-title', '你是哪位面试官？'));
     var wrap = el('div', 'chip-wrap');
-    g.interviewers.forEach(function (n) {
+    CFG.interviewers.forEach(function (n) {
       var b = el('button', 'chip', esc(n));
       b.onclick = function () {
         vib();
-        ME = { groupId: g.id, interviewer: n };
+        ME = { interviewer: n };
         saveME();
+        MYG = g.id;
         loadMine().then(render, function (e) { toast(e.message); render(); });
       };
       wrap.appendChild(b);
     });
     card.appendChild(wrap);
-    card.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">只需选一次，之后这台手机会自动记住。</span>'));
+    card.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">只需选一次，之后这台手机会自动记住，在任何小组都通用。</span>'));
     main.appendChild(card);
   }
 
@@ -479,7 +486,7 @@ main{padding:4px 14px 100px}
     }
 
     $('#switchIv').onclick = function () {
-      ME = null; MY = {};
+      ME = null; MY = {}; MYG = null;
       try { localStorage.removeItem(LS_KEY); } catch (e) {}
       render();
     };
@@ -531,7 +538,7 @@ main{padding:4px 14px 100px}
     $('#sheetClose').onclick = hideSheets;
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
-      post('/api/score', { g: ME.groupId, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
+      post('/api/score', { g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
         .then(function () {
           MY[c.id] = { e: pend.e, w: pend.w };
           vib(20); hideSheets(); render(); toast('已保存');
@@ -661,7 +668,6 @@ main{padding:4px 14px 100px}
     if (!any) { main.appendChild(el('div', 'card empty', '还没有人打分')); return; }
 
     RANK.forEach(function (r) {
-      var by = (r.groups && r.groups.length) ? ' · ' + esc(r.groups.join('、')) : '';
       if (r.count === 0) {
         var e2 = el('div', 'rank-row');
         e2.innerHTML = '<div class="medal">—</div><div class="rank-main">' +
@@ -671,7 +677,7 @@ main{padding:4px 14px 100px}
         return;
       }
       var cls = r.rank === 1 ? ' m1' : r.rank === 2 ? ' m2' : r.rank === 3 ? ' m3' : '';
-      var sub = (r.total != null ? r.count + '/' + r.total : r.count + '') + ' 位面试官已打分' + by + ' · 点击看明细';
+      var sub = (r.total != null ? r.count + '/' + r.total : r.count + '') + ' 位面试官已打分 · 点击看明细';
       var row = el('button', 'rank-row');
       row.innerHTML = '<div class="medal' + cls + '">' + r.rank + '</div>' +
         '<div class="rank-main"><div class="rank-name">' + esc(r.name) +
@@ -692,9 +698,8 @@ main{padding:4px 14px 100px}
     });
   }
 
-  /* ================= 管理面试官 ================= */
+  /* ================= 管理面试官（全局一份名单，所有组共用） ================= */
   function openManage() {
-    MG = CURGROUP || MG || CFG.groups[0].id;
     paintManage();
     showSheet('#msheet');
   }
@@ -702,32 +707,24 @@ main{padding:4px 14px 100px}
   function paintManage() {
     var sheet = $('#msheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div class="sheet-name">管理面试官</div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">管理面试官</div>' +
+      '<div class="sheet-sub">全局一份名单 · 所有小组共用</div></div>' +
       '<button class="sheet-close" id="mClose">关闭</button></div>' +
-      '<div class="m-sec"><div class="grade-label">选择组</div><div class="chip-wrap" id="mGroups"></div></div>' +
       '<div class="m-sec"><div class="grade-label">面试官（点 × 移除）</div>' +
         '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
         '<div class="chip-wrap" id="mIvList"></div></div>';
 
     $('#mClose').onclick = hideSheets;
 
-    var gWrap = $('#mGroups');
-    CFG.groups.forEach(function (g) {
-      var b = el('button', 'chip' + (MG === g.id ? ' on' : ''), esc(g.name));
-      b.onclick = function () { MG = g.id; paintManage(); };
-      gWrap.appendChild(b);
-    });
-
-    var g = groupById(MG);
     var box = $('#mIvList');
-    if (!g.interviewers.length) {
+    if (!CFG.interviewers.length) {
       box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
     } else {
-      g.interviewers.forEach(function (n) {
+      CFG.interviewers.forEach(function (n) {
         var t = el('span', 'tag', esc(n) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + n + '」从' + g.name + '移除？\n他/她的打分记录也会一并删除。')) return;
-          manage(MG, 'iv', n, 'del').then(paintManage);
+          if (!confirm('把「' + n + '」移除？\n他/她在所有组里的打分记录也会一并删除。')) return;
+          manage('iv', n, 'del').then(paintManage);
         };
         box.appendChild(t);
       });
@@ -737,20 +734,21 @@ main{padding:4px 14px 100px}
     function add() {
       var v = inp.value.trim();
       if (!v) return;
-      manage(MG, 'iv', v, 'add').then(function () { inp.value = ''; inp.focus(); paintManage(); });
+      manage('iv', v, 'add').then(function () { inp.value = ''; inp.focus(); paintManage(); });
     }
     $('#mIvAdd').onclick = add;
-    inp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
+    inp.onkeydown = function (e) { if (e.key === 'Enter' ) add(); };
   }
 
-  function manage(gid, kind, name, op) {
-    return post('/api/manage', { g: gid, kind: kind, name: name, op: op })
+  function manage(kind, name, op) {
+    return post('/api/manage', { kind: kind, name: name, op: op })
       .then(function (j) {
-        CFG.groups = j.groups;
+        if (j.interviewers) CFG.interviewers = j.interviewers;
+        if (j.groups) CFG.groups = j.groups;
         vib(18);
         toast(op === 'add' ? '已添加' : '已移除');
-        if (ME && !identityOK(groupById(ME.groupId))) {
-          ME = null; MY = {};
+        if (ME && CFG.interviewers.indexOf(ME.interviewer) < 0) {
+          ME = null; MY = {}; MYG = null;
           try { localStorage.removeItem(LS_KEY); } catch (e) {}
         }
         if (VIEW === 'rank') renderRank(); else render();
