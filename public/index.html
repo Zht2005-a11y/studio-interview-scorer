@@ -122,14 +122,6 @@ main{padding:4px 14px 100px}
 .cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;padding:5px 12px;border-radius:999px}
 .cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
 
-.add-cand{
-  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
-  padding:16px;border-radius:16px;border:1.5px dashed #d0d5dd;background:transparent;
-  color:var(--brand);font-size:15.5px;font-weight:600;transition:.16s;
-}
-.add-cand:active{transform:scale(.985);background:#f8f9fe}
-.add-cand svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
-
 /* ---------- 排名 ---------- */
 .rank-row{
   display:flex;align-items:center;gap:13px;background:var(--card);border-radius:16px;
@@ -238,6 +230,22 @@ main{padding:4px 14px 100px}
   font-style:normal;font-size:13px;line-height:20px;text-align:center;font-weight:700;
 }
 .tag i:active{background:#fda29b;color:#fff}
+
+/* ---------- 首页「面试者名单」入口 / 批量导入 ---------- */
+.gbadge.add{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 16px rgba(18,183,106,.28)}
+.gbadge.add svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.add-row input.c-cls{flex:0 0 32%}
+.batch-box textarea{
+  width:100%;min-height:92px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
+  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
+}
+.batch-box textarea:focus{border-color:var(--brand);background:#fff}
+.btn-batch{
+  width:100%;margin-top:10px;padding:13px;border-radius:13px;background:var(--ink);color:#fff;
+  font-size:15px;font-weight:600;transition:.16s;
+}
+.btn-batch:active{transform:scale(.98)}
+.c-cls{font-style:normal;font-size:12.5px;color:var(--ink3);font-weight:500;margin-left:8px}
 
 .toast{
   position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);
@@ -359,12 +367,21 @@ main{padding:4px 14px 100px}
     return renderGroup();
   }
 
-  /* ================= 组列表 ================= */
+  /* ================= 组列表（首页） ================= */
   function renderGroups() {
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = CFG.title || '面试打分';
-    $('#topSub').textContent = '点击进入你的小组';
+    $('#topSub').textContent = '先导入面试者名单，再进入小组打分';
+
+    var entry = el('button', 'gcard');
+    entry.innerHTML =
+      '<span class="gbadge add"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>' +
+      '<span class="gmain"><span class="gname">面试者名单</span>' +
+      '<span class="gmeta">共 ' + CFG.candidates.length + ' 人 · 添加 / 批量导入</span></span>' +
+      '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+    entry.onclick = function () { vib(); openCands(); };
+    main.appendChild(entry);
 
     var list = el('div', 'list');
     CFG.groups.forEach(function (g, i) {
@@ -372,7 +389,7 @@ main{padding:4px 14px 100px}
       card.innerHTML =
         '<span class="gbadge">' + (i + 1) + '</span>' +
         '<span class="gmain"><span class="gname">' + esc(g.name) + '</span>' +
-        '<span class="gmeta">' + g.interviewers.length + ' 位面试官 · ' + g.candidates.length + ' 位面试者</span></span>' +
+        '<span class="gmeta">' + g.interviewers.length + ' 位面试官 · 全组共用名单</span></span>' +
         '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
       card.onclick = function () { vib(); CURGROUP = g.id; render(); };
       list.appendChild(card);
@@ -421,14 +438,15 @@ main{padding:4px 14px 100px}
     main.appendChild(card);
   }
 
-  /* --- 面试者列表 --- */
+  /* --- 面试者列表（所有组共用一份名单） --- */
   function renderCandidates(g) {
     $('#topSub').textContent = g.name + ' · 面试官 ' + ME.interviewer;
     var main = $('#main'); main.innerHTML = '';
 
-    var total = g.candidates.length;
+    var cands = CFG.candidates;
+    var total = cands.length;
     var done = 0;
-    g.candidates.forEach(function (c) { if (MY[c]) done++; });
+    cands.forEach(function (c) { if (MY[c.id]) done++; });
 
     var hero = el('div', 'hero');
     hero.innerHTML =
@@ -441,24 +459,25 @@ main{padding:4px 14px 100px}
       '<div class="hero-bar"><i style="width:' + (total ? done / total * 100 : 0) + '%"></i></div>';
     main.appendChild(hero);
 
-    var list = el('div', 'list');
-    g.candidates.forEach(function (c, i) {
-      var s = MY[c];
-      var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
-      var row = el('button', 'cand' + (s ? ' done' : ''));
-      row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
-        '<span class="cand-name">' + esc(c) + '</span>' +
-        (s ? '<span class="cand-tag">' + t + ' 分</span>' : '<span class="cand-tag empty">未打分</span>');
-      row.onclick = function () { openSheet(c); };
-      list.appendChild(row);
-    });
+    if (!total) {
+      main.appendChild(el('div', 'card empty',
+        '还没有面试者名单<br><span style="font-size:13px">回到首页，点「面试者名单」添加或批量导入</span>'));
+    } else {
+      var list = el('div', 'list');
+      cands.forEach(function (c, i) {
+        var s = MY[c.id];
+        var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
+        var row = el('button', 'cand' + (s ? ' done' : ''));
+        row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
+          '<span class="cand-name">' + esc(c.name) +
+          (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
+          (s ? '<span class="cand-tag">' + t + ' 分</span>' : '<span class="cand-tag empty">未打分</span>');
+        row.onclick = function () { openSheet(c); };
+        list.appendChild(row);
+      });
+      main.appendChild(list);
+    }
 
-    var add = el('button', 'add-cand',
-      '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 添加面试者');
-    add.onclick = openAdd;
-    list.appendChild(add);
-
-    main.appendChild(list);
     $('#switchIv').onclick = function () {
       ME = null; MY = {};
       try { localStorage.removeItem(LS_KEY); } catch (e) {}
@@ -476,14 +495,14 @@ main{padding:4px 14px 100px}
     return h + '</div></div>';
   }
 
-  function openSheet(name) {
-    var prev = MY[name] || { e: null, w: null };
+  function openSheet(c) {
+    var prev = MY[c.id] || { e: null, w: null };
     var pend = { e: prev.e, w: prev.w };
 
     var sheet = $('#sheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">' + esc(name) + '</div>' +
-      '<div class="sheet-sub">打分人：' + esc(ME.interviewer) + '</div></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">' + esc(c.name) + '</div>' +
+      '<div class="sheet-sub">' + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) + '</div></div>' +
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
       gradeBlock('表达能力', 'e', CFG.expressLevels, pend.e) +
       gradeBlock('是否常来工作室', 'w', CFG.willingLevels, pend.w) +
@@ -512,16 +531,17 @@ main{padding:4px 14px 100px}
     $('#sheetClose').onclick = hideSheets;
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
-      post('/api/score', { g: ME.groupId, c: name, i: ME.interviewer, e: pend.e, w: pend.w })
+      post('/api/score', { g: ME.groupId, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
         .then(function () {
-          MY[name] = { e: pend.e, w: pend.w };
+          MY[c.id] = { e: pend.e, w: pend.w };
           vib(20); hideSheets(); render(); toast('已保存');
           setTimeout(function () {
-            var g = groupById(ME.groupId);
-            var idx = g.candidates.indexOf(name);
-            for (var k = 1; k <= g.candidates.length; k++) {
-              var nx = g.candidates[(idx + k) % g.candidates.length];
-              if (!MY[nx]) { openSheet(nx); return; }
+            var cands = CFG.candidates;
+            var idx = 0;
+            cands.forEach(function (cc, i) { if (cc.id === c.id) idx = i; });
+            for (var k = 1; k <= cands.length; k++) {
+              var nx = cands[(idx + k) % cands.length];
+              if (!MY[nx.id]) { openSheet(nx); return; }
             }
             toast('本组已全部打分完成');
           }, 300);
@@ -532,49 +552,84 @@ main{padding:4px 14px 100px}
     refresh();
   }
 
-  /* ================= 添加面试者 ================= */
-  function openAdd() {
-    var g = groupById(CURGROUP);
+  /* ================= 面试者名单（首页入口，所有组共用） ================= */
+  function openCands() {
+    paintCands();
+    showSheet('#asheet');
+  }
+
+  function paintCands() {
     var sheet = $('#asheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">添加面试者</div>' +
-      '<div class="sheet-sub">' + esc(g.name) + '</div></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">面试者名单</div>' +
+      '<div class="sheet-sub">所有小组共用 · 按班级 + 姓名添加，支持批量导入</div></div>' +
       '<button class="sheet-close" id="aClose">完成</button></div>' +
-      '<div class="add-row"><input id="aInput" maxlength="20" placeholder="输入面试者姓名"><button id="aAdd">添加</button></div>' +
-      '<div class="grade-label" style="margin-top:18px">已添加（点 × 可删除）</div>' +
-      '<div class="chip-wrap" id="aList"></div>';
+      '<div class="m-sec"><div class="grade-label">单个添加</div>' +
+        '<div class="add-row"><input class="c-cls" id="cCls" maxlength="30" placeholder="班级，如 软件2301">' +
+        '<input id="cName" maxlength="20" placeholder="姓名"><button id="cAdd">添加</button></div></div>' +
+      '<div class="m-sec batch-box"><div class="grade-label">批量导入</div>' +
+        '<textarea id="cBatch" placeholder="每行一位：班级 姓名（空格分隔）&#10;例如：&#10;软件2301 张三&#10;大数据2302 李四&#10;也可以只写姓名"></textarea>' +
+        '<button class="btn-batch" id="cBatchBtn">批量导入</button></div>' +
+      '<div class="m-sec"><div class="grade-label">已添加 ' + CFG.candidates.length + ' 人（点 × 删除）</div>' +
+        '<div class="chip-wrap" id="cList"></div></div>';
 
-    showSheet('#asheet');
     $('#aClose').onclick = hideSheets;
 
-    function paint() {
-      var cur = groupById(CURGROUP);
-      var box = $('#aList');
-      box.innerHTML = '';
-      if (!cur.candidates.length) {
-        box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
-        return;
-      }
-      cur.candidates.forEach(function (n) {
-        var t = el('span', 'tag', esc(n) + '<i>×</i>');
+    var box = $('#cList');
+    if (!CFG.candidates.length) {
+      box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
+    } else {
+      CFG.candidates.forEach(function (c) {
+        var label = (c.cls ? c.cls + ' ' : '') + c.name;
+        var t = el('span', 'tag', esc(label) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + n + '」从' + cur.name + '移除？\n他/她的打分记录也会一并删除。')) return;
-          manage(CURGROUP, 'cd', n, 'del').then(paint);
+          if (!confirm('把「' + label + '」从名单移除？\n所有组里他/她的打分记录也会一并删除。')) return;
+          cdManage('del', { id: c.id }).then(function () { paintCands(); });
         };
         box.appendChild(t);
       });
     }
-    paint();
 
-    var inp = $('#aInput');
+    var clsInp = $('#cCls'), nameInp = $('#cName');
     function add() {
-      var v = inp.value.trim();
-      if (!v) return;
-      manage(CURGROUP, 'cd', v, 'add').then(function () { inp.value = ''; inp.focus(); paint(); });
+      var v = nameInp.value.trim();
+      if (!v) { toast('请输入姓名'); return; }
+      cdManage('add', { name: v, cls: clsInp.value.trim() })
+        .then(function () { nameInp.value = ''; nameInp.focus(); paintCands(); })
+        .catch(function () {});
     }
-    $('#aAdd').onclick = add;
-    inp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
-    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 300);
+    $('#cAdd').onclick = add;
+    nameInp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
+
+    $('#cBatchBtn').onclick = function () {
+      var items = [];
+      $('#cBatch').value.split(/\n+/).forEach(function (line) {
+        var t = line.trim().split(/\s+/);
+        if (!t[0]) return;
+        if (t.length >= 2) items.push({ cls: t[0], name: t.slice(1).join('') });
+        else items.push({ cls: '', name: t[0] });
+      });
+      if (!items.length) { toast('请先粘贴名单，每行一位'); return; }
+      cdManage('batch', { items: items })
+        .then(function (j) {
+          $('#cBatch').value = '';
+          toast('已导入 ' + j.added + ' 人' + (j.skipped ? '，跳过 ' + j.skipped + ' 人（已存在或姓名无效）' : ''));
+          paintCands();
+        })
+        .catch(function () {});
+    };
+  }
+
+  function cdManage(op, payload) {
+    var body = { kind: 'cd', op: op };
+    Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
+    return post('/api/manage', body).then(function (j) {
+      CFG.candidates = j.candidates;
+      vib(18);
+      if (op === 'del') toast('已移除');
+      if (VIEW === 'rank') renderRank(); else render();
+      return j;
+    }).catch(function (e) { toast(e.message); throw e; });
   }
 
   /* ================= 排名页 ================= */
@@ -613,7 +668,7 @@ main{padding:4px 14px 100px}
     if (!cur) return;
 
     if (!cur.rows.length) {
-      main.appendChild(el('div', 'card empty', '本组还没有面试者<br><span style="font-size:13px">到「打分」里进入小组添加</span>'));
+      main.appendChild(el('div', 'card empty', '还没有面试者名单<br><span style="font-size:13px">到首页「面试者名单」里添加</span>'));
       return;
     }
     var any = false;
@@ -624,7 +679,7 @@ main{padding:4px 14px 100px}
       if (r.count === 0) {
         var e2 = el('div', 'rank-row');
         e2.innerHTML = '<div class="medal">—</div><div class="rank-main">' +
-          '<div class="rank-name">' + esc(r.name) + '</div>' +
+          '<div class="rank-name">' + esc(r.name) + (r.cls ? '<em class="c-cls">' + esc(r.cls) + '</em>' : '') + '</div>' +
           '<div class="rank-sub">还没有面试官打分</div></div>';
         main.appendChild(e2);
         return;
@@ -632,7 +687,8 @@ main{padding:4px 14px 100px}
       var cls = r.rank === 1 ? ' m1' : r.rank === 2 ? ' m2' : r.rank === 3 ? ' m3' : '';
       var row = el('button', 'rank-row');
       row.innerHTML = '<div class="medal' + cls + '">' + r.rank + '</div>' +
-        '<div class="rank-main"><div class="rank-name">' + esc(r.name) + '</div>' +
+        '<div class="rank-main"><div class="rank-name">' + esc(r.name) +
+        (r.cls ? '<em class="c-cls">' + esc(r.cls) + '</em>' : '') + '</div>' +
         '<div class="rank-sub">' + r.count + '/' + r.total + ' 位面试官已打分 · 点击看明细</div></div>' +
         '<div class="rank-score"><b>' + r.avg + '</b><span>平均分</span></div>';
 
