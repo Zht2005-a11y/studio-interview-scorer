@@ -92,7 +92,13 @@ function normalize(cfg) {
     const key = o.cls + '\u0000' + o.name;
     if (seenCd[key]) return;
     seenCd[key] = 1;
-    cd.push({ id: o.id || uid(), name: o.name, cls: o.cls });
+    const item = { id: o.id || uid(), name: o.name, cls: o.cls };
+    // 评语挂在这个人身上，重启/迁移时不能丢
+    const cm = c && c.comment;
+    if (cm && str(cm.text)) {
+      item.comment = { text: str(cm.text), by: str(cm.by), ts: Number(cm.ts) || Date.now() };
+    }
+    cd.push(item);
   }
 
   // 旧版把面试官挂在各个组里（按组隔离），这里全部并入全局名单
@@ -221,7 +227,8 @@ function unifiedRank() {
       count: n,
       total: CONFIG.interviewers.length,
       avg: n ? Math.round(sum / n * 100) / 100 : null,
-      detail: detail
+      detail: detail,
+      comment: c.comment || null
     };
   });
 
@@ -346,6 +353,26 @@ const server = http.createServer(function (req, res) {
       else scores.push({ g: d.g, c: d.c, i: d.i, e: d.e, w: d.w });
       writeJSON(SCORES_FILE, scores);
       return json(res, 200, { ok: true });
+    }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
+  }
+
+  /* ---- 面试者评语（每人一条，可添加可编辑，记录填写人） ---- */
+  if (p === '/api/comment' && method === 'POST') {
+    return readBody(req).then(function (raw) {
+      let d;
+      try { d = JSON.parse(raw || '{}'); } catch (e) { return json(res, 400, { error: '数据格式错误' }); }
+
+      const c = CONFIG.candidates.find(function (x) { return x.id === str(d.c); });
+      if (!c) return json(res, 400, { error: '面试者不在名单中' });
+      const by = str(d.by);
+      if (!by || by.length > 20) return json(res, 400, { error: '填写人无效' });
+      if (CONFIG.interviewers.indexOf(by) < 0) return json(res, 400, { error: '填写人不在面试官名单中' });
+
+      const text = str(d.text).slice(0, 200);
+      if (text) c.comment = { text: text, by: by, ts: Date.now() };
+      else delete c.comment;   // 空评语 = 清除
+      writeJSON(CONFIG_FILE, CONFIG);
+      return json(res, 200, { ok: true, candidate: c });
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 

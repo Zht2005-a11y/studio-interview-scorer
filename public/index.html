@@ -120,9 +120,25 @@ main{padding:4px 14px 100px}
 .cand.done .idx{background:#eafaf1;color:var(--good)}
 .cand.lock{opacity:.55}
 .cand.lock:active{transform:none;box-shadow:var(--sh-sm)}
-.cand-name{flex:1;font-size:16.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand-main{flex:1;min-width:0}
+.cand-name{display:block;font-size:16.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand-cmt{display:block;font-size:12px;color:var(--ink2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;padding:5px 12px;border-radius:999px}
 .cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
+
+/* ---------- 评语 ---------- */
+.cm-box{
+  width:100%;min-height:72px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
+  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;
+  font-family:inherit;line-height:1.6;transition:.16s;
+}
+.cm-box:focus{border-color:var(--brand);background:#fff}
+.cm-meta{font-size:12px;color:var(--ink3);margin-top:6px}
+.rank-comment{
+  margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line);
+  font-size:12.5px;color:var(--ink2);line-height:1.6;
+}
+.rank-comment b{color:var(--ink);font-weight:600}
 
 /* ---------- 排名 ---------- */
 .rank-row{
@@ -329,6 +345,11 @@ main{padding:4px 14px 100px}
   }
   function groupById(id) { for (var i = 0; i < CFG.groups.length; i++) if (CFG.groups[i].id === id) return CFG.groups[i]; return null; }
   function scoreOf(lv, k) { for (var i = 0; i < lv.length; i++) if (lv[i].key === k) return lv[i].score; return 0; }
+  function tsStr(ts) {
+    var d = new Date(ts);
+    function p(x) { return ('0' + x).slice(-2); }
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
   function saveME() { try { localStorage.setItem(LS_KEY, JSON.stringify(ME)); } catch (e) {} }
   function meOK() { return !!(ME && CFG.interviewers.indexOf(ME.interviewer) >= 0); }
 
@@ -490,9 +511,12 @@ main{padding:4px 14px 100px}
         var lk = lockedOf(c);
         var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
         var row = el('button', 'cand' + (lk ? ' lock' : (s ? ' done' : '')));
+        var cm = c.comment;
         row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
-          '<span class="cand-name">' + esc(c.name) +
+          '<span class="cand-main"><span class="cand-name">' + esc(c.name) +
           (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
+          (cm ? '<span class="cand-cmt">评语：' + esc(cm.text.length > 14 ? cm.text.slice(0, 14) + '…' : cm.text) + ' · ' + esc(cm.by) + '</span>' : '') +
+          '</span>' +
           (lk ? '<span class="cand-tag empty">' + esc(lkName) + '已评</span>'
              : s ? '<span class="cand-tag">' + t + ' 分</span>'
                 : '<span class="cand-tag empty">未打分</span>');
@@ -525,6 +549,7 @@ main{padding:4px 14px 100px}
   function openSheet(c) {
     var prev = MY[c.id] || { e: null, w: null };
     var pend = { e: prev.e, w: prev.w };
+    var origCm = c.comment ? c.comment.text : '';
 
     var sheet = $('#sheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
@@ -533,15 +558,22 @@ main{padding:4px 14px 100px}
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
       gradeBlock('表达能力', 'e', CFG.expressLevels, pend.e) +
       gradeBlock('是否常来工作室', 'w', CFG.willingLevels, pend.w) +
+      '<div class="grade-block"><div class="grade-label">评语</div>' +
+        '<textarea id="cmBox" class="cm-box" maxlength="200" placeholder="写下对这位面试者的评语（可以打分时写，打分后再来改）">' +
+        esc(origCm) + '</textarea>' +
+        (c.comment ? '<div class="cm-meta">当前评语由 ' + esc(c.comment.by) + ' 填写 · ' + tsStr(c.comment.ts) + '</div>' : '') +
+      '</div>' +
       '<div class="total-line"><span>本次合计</span><b id="totalNum">—</b></div>' +
       '<button class="btn-primary" id="saveBtn" disabled>保存</button>';
 
     showSheet('#sheet');
+    var cmBox = $('#cmBox');
 
     function refresh() {
-      var ok = !!(pend.e && pend.w);
-      $('#totalNum').textContent = ok ? (scoreOf(CFG.expressLevels, pend.e) + scoreOf(CFG.willingLevels, pend.w) + ' 分') : '—';
-      $('#saveBtn').disabled = !ok;
+      var gradeOk = !!(pend.e && pend.w);
+      var cmOk = cmBox.value.trim() !== origCm;   // 评语有改动才允许「只存评语」
+      $('#totalNum').textContent = gradeOk ? (scoreOf(CFG.expressLevels, pend.e) + scoreOf(CFG.willingLevels, pend.w) + ' 分') : '—';
+      $('#saveBtn').disabled = !(gradeOk || cmOk);
     }
 
     sheet.querySelectorAll('.grade').forEach(function (btn) {
@@ -558,11 +590,26 @@ main{padding:4px 14px 100px}
     $('#sheetClose').onclick = hideSheets;
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
-      post('/api/score', { g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
-        .then(function () {
+      var cmText = cmBox.value.trim();
+      var hasGrade = !!(pend.e && pend.w);
+      var jobs = [];
+      if (cmText !== origCm) jobs.push(post('/api/comment', { c: c.id, text: cmText, by: ME.interviewer }));
+      if (hasGrade) jobs.push(post('/api/score', { g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w }));
+      Promise.all(jobs).then(function (res) {
+        var ci = 0;
+        if (cmText !== origCm) {
+          var jc = res[ci++];
+          if (jc && jc.candidate) {
+            CFG.candidates = CFG.candidates.map(function (x) { return x.id === jc.candidate.id ? jc.candidate : x; });
+          }
+        }
+        if (hasGrade) {
           MY[c.id] = { e: pend.e, w: pend.w };
           LOCK[c.id] = CURGROUP;
-          vib(20); hideSheets(); render(); toast('已保存');
+        }
+        vib(20); hideSheets(); render();
+        toast(hasGrade ? '已保存' : '评语已保存');
+        if (hasGrade) {
           setTimeout(function () {
             var cands = CFG.candidates;
             var idx = 0;
@@ -574,8 +621,8 @@ main{padding:4px 14px 100px}
             }
             toast('本组已全部打分完成');
           }, 300);
-        })
-        .catch(function (e) { $('#saveBtn').disabled = false; toast('保存失败：' + e.message); });
+        }
+      }).catch(function (e) { $('#saveBtn').disabled = false; toast('保存失败：' + e.message); });
     };
 
     refresh();
@@ -709,7 +756,10 @@ main{padding:4px 14px 100px}
 
       var detail = el('div', 'rank-detail');
       detail.hidden = true;
-      detail.innerHTML = r.detail.map(function (d) {
+      var cmHtml = r.comment
+        ? '<div class="rank-comment">评语：' + esc(r.comment.text) + '　<b>—— ' + esc(r.comment.by) + '</b></div>'
+        : '';
+      detail.innerHTML = cmHtml + r.detail.map(function (d) {
         return '<div class="d-row"><span>' + esc(d.interviewer) + '　' + esc(d.expressLabel) + ' ' + d.expressScore +
           ' + ' + esc(d.willingLabel) + ' ' + d.willingScore + '</span><b>' + d.total + '</b></div>';
       }).join('');
