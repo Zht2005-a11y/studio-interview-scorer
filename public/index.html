@@ -118,6 +118,8 @@ main{padding:4px 14px 100px}
   font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
 }
 .cand.done .idx{background:#eafaf1;color:var(--good)}
+.cand.lock{opacity:.55}
+.cand.lock:active{transform:none;box-shadow:var(--sh-sm)}
 .cand-name{flex:1;font-size:16.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;padding:5px 12px;border-radius:999px}
 .cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
@@ -231,9 +233,27 @@ main{padding:4px 14px 100px}
 }
 .tag i:active{background:#fda29b;color:#fff}
 
-/* ---------- 首页「面试者名单」入口 / 批量导入 ---------- */
-.gbadge.add{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 16px rgba(18,183,106,.28)}
-.gbadge.add svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* ---------- 首页正方形入口 ---------- */
+.entry-row{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:13px}
+.sq{
+  aspect-ratio:1/1;border-radius:20px;background:var(--card);box-shadow:var(--sh-sm);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+  padding:10px;text-align:center;transition:.16s;
+}
+.sq:active{transform:scale(.97);box-shadow:var(--sh)}
+.sq-ic{width:46px;height:46px;border-radius:15px;display:flex;align-items:center;justify-content:center;color:#fff}
+.sq-ic svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sq.grp .sq-ic{background:linear-gradient(135deg,#4a6cf7,#6b5cff);box-shadow:0 6px 14px rgba(74,108,247,.3)}
+.sq.cand .sq-ic{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 14px rgba(18,183,106,.3)}
+.sq b{font-size:15.5px;font-weight:700;letter-spacing:-.2px}
+.sq span{font-size:12px;color:var(--ink3);line-height:1.4}
+
+/* ---------- 面试者名单（首页入口 + 批量导入） ---------- */
+.pl-del{
+  flex:none;width:30px;height:30px;border-radius:10px;background:#f4f6fa;color:#98a2b3;
+  font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.15s;
+}
+.pl-del:active{background:#fda29b;color:#fff}
 .add-row input.c-cls{flex:0 0 32%}
 .batch-box textarea{
   width:100%;min-height:92px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
@@ -265,7 +285,7 @@ main{padding:4px 14px 100px}
     <div class="appbar-title" id="topTitle">面试打分</div>
     <div class="appbar-sub" id="topSub"></div>
   </div>
-  <button class="icon-btn" id="manageBtn" title="管理面试官">
+  <button class="icon-btn" id="manageBtn" title="面试组管理">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 </header>
@@ -293,7 +313,8 @@ main{padding:4px 14px 100px}
 (function () {
   var CFG = null;
   var ME = null;          // { groupId, interviewer }
-  var MY = {};            // 我已打的分：candidateName -> { e, w }
+  var MY = {};            // 我已打的分：candidateId -> { e, w }
+  var LOCK = {};          // 面试者已被哪个组评分：candidateId -> groupId
   var CURGROUP = null;    // 当前进入的组
   var VIEW = 'score';     // score | rank
   var RANK = null, RANKG = null;
@@ -352,11 +373,14 @@ main{padding:4px 14px 100px}
 
   function loadMine() {
     if (!ME) { MY = {}; return Promise.resolve(); }
-    return api('/api/mine?g=' + encodeURIComponent(ME.groupId) + '&i=' + encodeURIComponent(ME.interviewer))
-      .then(function (j) {
-        MY = {};
-        (j.list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
-      });
+    return Promise.all([
+      api('/api/mine?g=' + encodeURIComponent(ME.groupId) + '&i=' + encodeURIComponent(ME.interviewer)),
+      api('/api/scored')
+    ]).then(function (r) {
+      MY = {};
+      (r[0].list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
+      LOCK = r[1].of || {};
+    });
   }
 
   function render() {
@@ -372,16 +396,20 @@ main{padding:4px 14px 100px}
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = CFG.title || '面试打分';
-    $('#topSub').textContent = '先导入面试者名单，再进入小组打分';
+    $('#topSub').textContent = '先建组、导入名单，再进组打分';
 
-    var entry = el('button', 'gcard');
-    entry.innerHTML =
-      '<span class="gbadge add"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>' +
-      '<span class="gmain"><span class="gname">面试者名单</span>' +
-      '<span class="gmeta">共 ' + CFG.candidates.length + ' 人 · 添加 / 批量导入</span></span>' +
-      '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
-    entry.onclick = function () { vib(); openCands(); };
-    main.appendChild(entry);
+    var row = el('div', 'entry-row');
+    var sqG = el('button', 'sq grp',
+      '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>' +
+      '<b>创建组</b><span>新建面试组<br>管理各组面试官</span>');
+    sqG.onclick = function () { vib(); openManage(); };
+    var sqC = el('button', 'sq cand',
+      '<span class="sq-ic"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>' +
+      '<b>添加面试者</b><span>单个 / 批量导入<br>查看名单（共 ' + CFG.candidates.length + ' 人）</span>');
+    sqC.onclick = function () { vib(); openCands(); };
+    row.appendChild(sqG);
+    row.appendChild(sqC);
+    main.appendChild(row);
 
     var list = el('div', 'list');
     CFG.groups.forEach(function (g, i) {
@@ -416,7 +444,7 @@ main{padding:4px 14px 100px}
 
     if (!g.interviewers.length) {
       main.appendChild(el('div', 'card hint warn',
-        '「' + esc(g.name) + '」还没有面试官，点右上角齿轮添加。'));
+        '「' + esc(g.name) + '」还没有面试官，到首页「创建组」里为它添加。'));
       return;
     }
 
@@ -438,15 +466,19 @@ main{padding:4px 14px 100px}
     main.appendChild(card);
   }
 
-  /* --- 面试者列表（所有组共用一份名单） --- */
+  /* --- 面试者列表（所有组共用一份名单；已被其他组评分的锁定） --- */
   function renderCandidates(g) {
     $('#topSub').textContent = g.name + ' · 面试官 ' + ME.interviewer;
     var main = $('#main'); main.innerHTML = '';
 
-    var cands = CFG.candidates;
-    var total = cands.length;
+    var lockedOf = function (c) {
+      return LOCK[c.id] && LOCK[c.id] !== g.id ? LOCK[c.id] : null;
+    };
+    var usable = CFG.candidates.filter(function (c) { return !lockedOf(c); });
+
+    var total = usable.length;
     var done = 0;
-    cands.forEach(function (c) { if (MY[c.id]) done++; });
+    usable.forEach(function (c) { if (MY[c.id]) done++; });
 
     var hero = el('div', 'hero');
     hero.innerHTML =
@@ -459,20 +491,30 @@ main{padding:4px 14px 100px}
       '<div class="hero-bar"><i style="width:' + (total ? done / total * 100 : 0) + '%"></i></div>';
     main.appendChild(hero);
 
-    if (!total) {
+    if (!CFG.candidates.length) {
       main.appendChild(el('div', 'card empty',
-        '还没有面试者名单<br><span style="font-size:13px">回到首页，点「面试者名单」添加或批量导入</span>'));
+        '还没有面试者名单<br><span style="font-size:13px">回到首页，点「添加面试者」添加或批量导入</span>'));
+    } else if (!usable.length) {
+      main.appendChild(el('div', 'card empty',
+        '名单里的面试者都已由其他组评分<br><span style="font-size:13px">可去「排名」页查看各组结果</span>'));
     } else {
       var list = el('div', 'list');
-      cands.forEach(function (c, i) {
+      CFG.candidates.forEach(function (c, i) {
+        var lk = lockedOf(c);
         var s = MY[c.id];
         var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
-        var row = el('button', 'cand' + (s ? ' done' : ''));
+        var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
+        var row = el('button', 'cand' + (lk ? ' lock' : (s ? ' done' : '')));
         row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
           '<span class="cand-name">' + esc(c.name) +
           (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
-          (s ? '<span class="cand-tag">' + t + ' 分</span>' : '<span class="cand-tag empty">未打分</span>');
-        row.onclick = function () { openSheet(c); };
+          (lk ? '<span class="cand-tag empty">' + esc(lkName) + '已评</span>'
+              : s ? '<span class="cand-tag">' + t + ' 分</span>'
+                  : '<span class="cand-tag empty">未打分</span>');
+        row.onclick = function () {
+          if (lk) { toast('「' + c.name + '」已由' + lkName + '评分，本组不能再评'); return; }
+          openSheet(c);
+        };
         list.appendChild(row);
       });
       main.appendChild(list);
@@ -534,6 +576,7 @@ main{padding:4px 14px 100px}
       post('/api/score', { g: ME.groupId, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w })
         .then(function () {
           MY[c.id] = { e: pend.e, w: pend.w };
+          LOCK[c.id] = ME.groupId;
           vib(20); hideSheets(); render(); toast('已保存');
           setTimeout(function () {
             var cands = CFG.candidates;
@@ -541,6 +584,7 @@ main{padding:4px 14px 100px}
             cands.forEach(function (cc, i) { if (cc.id === c.id) idx = i; });
             for (var k = 1; k <= cands.length; k++) {
               var nx = cands[(idx + k) % cands.length];
+              if (LOCK[nx.id] && LOCK[nx.id] !== ME.groupId) continue;
               if (!MY[nx.id]) { openSheet(nx); return; }
             }
             toast('本组已全部打分完成');
@@ -552,8 +596,11 @@ main{padding:4px 14px 100px}
     refresh();
   }
 
-  /* ================= 面试者名单（首页入口，所有组共用） ================= */
+  /* ================= 面试者管理（首页入口，所有组共用） ================= */
+  var CTAB = 'add'; // add | list
+
   function openCands() {
+    CTAB = 'add';
     paintCands();
     showSheet('#asheet');
   }
@@ -561,34 +608,34 @@ main{padding:4px 14px 100px}
   function paintCands() {
     var sheet = $('#asheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">面试者名单</div>' +
-      '<div class="sheet-sub">所有小组共用 · 按班级 + 姓名添加，支持批量导入</div></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">面试者管理</div>' +
+      '<div class="sheet-sub">所有小组共用 · 共 ' + CFG.candidates.length + ' 人</div></div>' +
       '<button class="sheet-close" id="aClose">完成</button></div>' +
+      '<div class="chip-wrap" style="margin:16px 0 2px">' +
+        '<button class="chip' + (CTAB === 'add' ? ' on' : '') + '" id="tabAdd">添加面试者</button>' +
+        '<button class="chip' + (CTAB === 'list' ? ' on' : '') + '" id="tabList">查看名单（' + CFG.candidates.length + '）</button>' +
+      '</div>' +
+      '<div id="cBody"></div>';
+
+    $('#aClose').onclick = hideSheets;
+    $('#tabAdd').onclick = function () { vib(); CTAB = 'add'; paintCands(); };
+    $('#tabList').onclick = function () { vib(); CTAB = 'list'; paintCands(); };
+
+    var body = $('#cBody');
+    if (CTAB === 'add') return paintAddTab(body);
+    paintListTab(body);
+  }
+
+  /* --- Tab 1：添加（单个 + 批量） --- */
+  function paintAddTab(body) {
+    body.innerHTML =
       '<div class="m-sec"><div class="grade-label">单个添加</div>' +
         '<div class="add-row"><input class="c-cls" id="cCls" maxlength="30" placeholder="班级，如 软件2301">' +
         '<input id="cName" maxlength="20" placeholder="姓名"><button id="cAdd">添加</button></div></div>' +
       '<div class="m-sec batch-box"><div class="grade-label">批量导入</div>' +
         '<textarea id="cBatch" placeholder="每行一位：班级 姓名（空格分隔）&#10;例如：&#10;软件2301 张三&#10;大数据2302 李四&#10;也可以只写姓名"></textarea>' +
         '<button class="btn-batch" id="cBatchBtn">批量导入</button></div>' +
-      '<div class="m-sec"><div class="grade-label">已添加 ' + CFG.candidates.length + ' 人（点 × 删除）</div>' +
-        '<div class="chip-wrap" id="cList"></div></div>';
-
-    $('#aClose').onclick = hideSheets;
-
-    var box = $('#cList');
-    if (!CFG.candidates.length) {
-      box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
-    } else {
-      CFG.candidates.forEach(function (c) {
-        var label = (c.cls ? c.cls + ' ' : '') + c.name;
-        var t = el('span', 'tag', esc(label) + '<i>×</i>');
-        t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + label + '」从名单移除？\n所有组里他/她的打分记录也会一并删除。')) return;
-          cdManage('del', { id: c.id }).then(function () { paintCands(); });
-        };
-        box.appendChild(t);
-      });
-    }
+      '<div class="m-sec"><div class="hint" style="font-size:12.5px;color:#98a2b3">添加后在「查看名单」里管理；删除会连同所有组的打分一起清除。</div></div>';
 
     var clsInp = $('#cCls'), nameInp = $('#cName');
     function add() {
@@ -618,6 +665,30 @@ main{padding:4px 14px 100px}
         })
         .catch(function () {});
     };
+  }
+
+  /* --- Tab 2：查看名单（列表展示） --- */
+  function paintListTab(body) {
+    body.innerHTML = '';
+    if (!CFG.candidates.length) {
+      body.innerHTML = '<div class="m-sec"><div class="card empty" style="box-shadow:none">还没有面试者<br><span style="font-size:13px">去「添加面试者」里添加或批量导入</span></div></div>';
+      return;
+    }
+    var list = el('div', 'list');
+    CFG.candidates.forEach(function (c, i) {
+      var label = (c.cls ? c.cls + ' ' : '') + c.name;
+      var row = el('div', 'cand');
+      row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
+        '<span class="cand-name">' + esc(c.name) +
+        (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
+        '<button class="pl-del" title="删除">×</button>';
+      row.querySelector('.pl-del').onclick = function () {
+        if (!confirm('把「' + label + '」从名单移除？\n所有组里他/她的打分记录也会一并删除。')) return;
+        cdManage('del', { id: c.id }).then(paintCands).catch(function () {});
+      };
+      list.appendChild(row);
+    });
+    body.appendChild(list);
   }
 
   function cdManage(op, payload) {
@@ -712,17 +783,30 @@ main{padding:4px 14px 100px}
     showSheet('#msheet');
   }
 
+  /* ================= 面试组管理（创建组 / 编辑各组面试官） ================= */
   function paintManage() {
     var sheet = $('#msheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div class="sheet-name">管理面试官</div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">面试组管理</div>' +
+      '<div class="sheet-sub">创建新组，或选择一个组增删面试官</div></div>' +
       '<button class="sheet-close" id="mClose">关闭</button></div>' +
+      '<div class="m-sec"><div class="grade-label">创建新组</div>' +
+        '<div class="add-row"><input id="mNewG" maxlength="20" placeholder="组名，如 第5组"><button id="mNewAdd">创建</button></div></div>' +
       '<div class="m-sec"><div class="grade-label">选择组</div><div class="chip-wrap" id="mGroups"></div></div>' +
-      '<div class="m-sec"><div class="grade-label">面试官（点 × 移除）</div>' +
+      '<div class="m-sec"><div class="grade-label" id="mIvLabel">面试官（点 × 移除）</div>' +
         '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
         '<div class="chip-wrap" id="mIvList"></div></div>';
 
     $('#mClose').onclick = hideSheets;
+
+    var newInp = $('#mNewG');
+    function create() {
+      var v = newInp.value.trim();
+      if (!v) { toast('请输入组名'); return; }
+      gpManage(v).then(function () { newInp.value = ''; }).catch(function () {});
+    }
+    $('#mNewAdd').onclick = create;
+    newInp.onkeydown = function (e) { if (e.key === 'Enter') create(); };
 
     var gWrap = $('#mGroups');
     CFG.groups.forEach(function (g) {
@@ -732,6 +816,7 @@ main{padding:4px 14px 100px}
     });
 
     var g = groupById(MG);
+    $('#mIvLabel').textContent = (g ? g.name : '') + ' · 面试官（点 × 移除）';
     var box = $('#mIvList');
     if (!g.interviewers.length) {
       box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
@@ -754,6 +839,21 @@ main{padding:4px 14px 100px}
     }
     $('#mIvAdd').onclick = add;
     inp.onkeydown = function (e) { if (e.key === 'Enter') add(); };
+  }
+
+  function gpManage(name) {
+    return post('/api/manage', { kind: 'gp', op: 'add', name: name })
+      .then(function (j) {
+        CFG.groups = j.groups;
+        vib(18); toast('已创建「' + name + '」');
+        for (var i = 0; i < CFG.groups.length; i++) {
+          if (CFG.groups[i].name === name) MG = CFG.groups[i].id;
+        }
+        if (VIEW === 'rank') renderRank(); else render();
+        paintManage();
+        return j;
+      })
+      .catch(function (e) { toast(e.message); throw e; });
   }
 
   function manage(gid, kind, name, op) {

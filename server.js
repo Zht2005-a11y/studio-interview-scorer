@@ -4,8 +4,8 @@
  * 工作室面试打分系统
  * 启动：node server.js        换端口：PORT=8080 node server.js
  *
- * 组和面试官：首次启动会按下面的 SEED 生成 data/config.json，之后在 App 右上角「管理」里改。
- * 面试者（班级 + 姓名，所有组共用）：在 App 首页「面试者名单」里添加、批量导入、删除。
+ * 组：在 App 首页「创建组」里新建；面试官也在那里按组增删（右上角齿轮同入口）。
+ * 面试者（班级 + 姓名，所有组共用）：在 App 首页「添加面试者」里添加、批量导入、删除。
  */
 
 /* ============ 初始名单（只在 data/config.json 不存在时使用） ============ */
@@ -247,6 +247,13 @@ const server = http.createServer(function (req, res) {
     });
   }
 
+  /* ---- 每位面试者已被哪个组评分（锁定状态） ---- */
+  if (p === '/api/scored' && method === 'GET') {
+    const of = {};
+    scores.forEach(function (s) { if (!of[s.c]) of[s.c] = s.g; });
+    return json(res, 200, { of: of });
+  }
+
   /* ---- 提交打分（同一人重复提交自动覆盖） ---- */
   if (p === '/api/score' && method === 'POST') {
     return readBody(req).then(function (raw) {
@@ -263,6 +270,13 @@ const server = http.createServer(function (req, res) {
       if (!levelOf(CONFIG.expressLevels, d.e)) return json(res, 400, { error: '表达能力等级无效' });
       if (!levelOf(CONFIG.willingLevels, d.w)) return json(res, 400, { error: '意愿等级无效' });
 
+      /* 一位面试者只能由一个组评分：已被其他组评过、本组还没评过的，拒绝 */
+      const other = scores.find(function (s) { return s.c === d.c && s.g !== d.g; });
+      if (other && !scores.some(function (s) { return s.c === d.c && s.g === d.g; })) {
+        const og = findGroup(other.g);
+        return json(res, 400, { error: '该面试者已由「' + (og ? og.name : '其他组') + '」评分，其他组不能再评' });
+      }
+
       const old = scores.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
       if (old) { old.e = d.e; old.w = d.w; }
       else scores.push({ g: d.g, c: d.c, i: d.i, e: d.e, w: d.w });
@@ -277,6 +291,7 @@ const server = http.createServer(function (req, res) {
   }
 
   /* ---- 管理名单 ----
+     面试组：{ kind:'gp', op:'add', name }
      面试官（按组）：{ g, kind:'iv', op:'add'|'del', name }
      面试者（全局共用）：{ kind:'cd', op:'add', name, cls }
                         { kind:'cd', op:'del', id }
@@ -285,6 +300,20 @@ const server = http.createServer(function (req, res) {
     return readBody(req).then(function (raw) {
       let d;
       try { d = JSON.parse(raw || '{}'); } catch (e) { return json(res, 400, { error: '数据格式错误' }); }
+
+      /* --- 面试组：创建 --- */
+      if (d.kind === 'gp') {
+        if (d.op !== 'add') return json(res, 400, { error: '操作错误' });
+        const name = str(d.name);
+        if (!name) return json(res, 400, { error: '组名不能为空' });
+        if (name.length > 20) return json(res, 400, { error: '组名太长了' });
+        if (CONFIG.groups.some(function (g) { return g.name === name; })) {
+          return json(res, 400, { error: '「' + name + '」已经存在了' });
+        }
+        CONFIG.groups.push({ id: uid(), name: name, interviewers: [] });
+        writeJSON(CONFIG_FILE, CONFIG);
+        return json(res, 200, { ok: true, groups: CONFIG.groups });
+      }
 
       /* --- 面试官（按组维护） --- */
       if (d.kind === 'iv') {
