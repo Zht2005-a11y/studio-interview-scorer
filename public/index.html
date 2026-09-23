@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>面试打分</title>
+<style>
+:root{
+  --bg:#f5f7fb;
+  --card:#ffffff;
+  --ink:#101828;
+  --ink2:#667085;
+  --ink3:#98a2b3;
+  --line:#eef0f4;
+  --brand:#3d5bfd;
+  --brand2:#6b5cff;
+  --bad:#f04438;
+  --warn:#f79009;
+  --good:#12b76a;
+  --sh-sm:0 1px 2px rgba(16,24,40,.05);
+  --sh:0 6px 20px rgba(16,24,40,.07);
+  --sh-lg:0 12px 36px rgba(16,24,40,.10);
+  --r:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;padding:0;overscroll-behavior-y:none}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;font-feature-settings:"tnum";
+}
+button{font-family:inherit;font-size:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+input{font-family:inherit}
+
+/* ---------- 顶栏 ---------- */
+.appbar{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 14px) 16px 12px;
+  background:rgba(245,247,251,.86);backdrop-filter:saturate(180%) blur(16px);
+}
+.appbar-l{flex:1;min-width:0}
+.appbar-title{font-size:19px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar-sub{font-size:12.5px;color:var(--ink2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{
+  flex:none;width:38px;height:38px;border-radius:12px;background:var(--card);
+  box-shadow:var(--sh-sm);display:flex;align-items:center;justify-content:center;color:var(--ink2);
+  transition:.15s;
+}
+.icon-btn:active{transform:scale(.92)}
+.icon-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pill-btn{
+  flex:none;padding:8px 15px;border-radius:11px;background:var(--card);box-shadow:var(--sh-sm);
+  font-size:13.5px;font-weight:600;color:var(--ink2);transition:.15s;
+}
+.pill-btn:active{transform:scale(.94)}
+
+main{padding:4px 14px 100px}
+
+/* ---------- 主视觉卡 ---------- */
+.hero{
+  position:relative;overflow:hidden;border-radius:22px;padding:20px 20px 18px;margin-bottom:16px;
+  background:linear-gradient(135deg,#4a6cf7 0%,#6b5cff 100%);
+  box-shadow:0 10px 28px rgba(74,108,247,.28);color:#fff;
+}
+.hero::after{
+  content:"";position:absolute;width:180px;height:180px;border-radius:50%;
+  right:-62px;top:-78px;background:rgba(255,255,255,.13);
+}
+.hero::before{
+  content:"";position:absolute;width:110px;height:110px;border-radius:50%;
+  right:14px;bottom:-72px;background:rgba(255,255,255,.09);
+}
+.hero-top{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.hero-group{font-size:22px;font-weight:800;letter-spacing:-.3px}
+.hero-iv{font-size:13px;opacity:.85;margin-top:3px}
+.hero-num{text-align:right;line-height:1}
+.hero-num b{font-size:30px;font-weight:800;letter-spacing:-1px}
+.hero-num span{font-size:14px;opacity:.8;margin-left:1px}
+.hero-num em{display:block;font-size:11.5px;font-style:normal;opacity:.8;margin-top:5px}
+.hero-bar{position:relative;height:6px;border-radius:99px;background:rgba(255,255,255,.25);margin-top:16px;overflow:hidden}
+.hero-bar i{display:block;height:100%;border-radius:99px;background:#fff;transition:width .35s cubic-bezier(.22,.8,.28,1)}
+
+/* ---------- 通用卡片 / 提示 ---------- */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh-sm);padding:16px;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:11px;letter-spacing:.3px}
+.hint{color:var(--ink2);font-size:14px;line-height:1.75}
+.hint.warn{color:#b54708}
+.empty{text-align:center;padding:34px 20px;color:var(--ink3);font-size:14px;line-height:1.9}
+.empty svg{width:40px;height:40px;stroke:var(--ink3);fill:none;stroke-width:1.5;opacity:.6;margin-bottom:10px}
+
+/* ---------- 选择组 / 姓名 ---------- */
+.group-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.group-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:17px 8px;
+  border-radius:15px;background:#f4f6fa;font-size:16px;font-weight:600;
+  border:1.5px solid transparent;transition:.16s;
+}
+.group-btn span{font-size:11.5px;font-weight:500;color:var(--ink3)}
+.group-btn.on{background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;border-color:transparent;box-shadow:0 6px 16px rgba(74,108,247,.3)}
+.group-btn.on span{color:rgba(255,255,255,.85)}
+.group-btn:active{transform:scale(.97)}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:9px}
+.chip{
+  padding:9px 17px;border-radius:999px;background:#f4f6fa;font-size:15px;font-weight:500;
+  border:1.5px solid transparent;transition:.16s;
+}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip:active{transform:scale(.96)}
+
+/* ---------- 面试者列表 ---------- */
+.list{display:flex;flex-direction:column;gap:10px}
+.cand{
+  display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
+  border-radius:16px;box-shadow:var(--sh-sm);padding:16px;transition:.16s;
+}
+.cand:active{transform:scale(.985);box-shadow:var(--sh)}
+.cand .idx{
+  flex:none;width:28px;height:28px;border-radius:9px;background:#f4f6fa;color:var(--ink3);
+  font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.cand.done .idx{background:#eafaf1;color:var(--good)}
+.cand-name{flex:1;font-size:16.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cand-tag{
+  flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;
+  padding:5px 12px;border-radius:999px;
+}
+.cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
+.cand-arrow{flex:none;color:#d0d5dd}
+.cand-arrow svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- 排名 ---------- */
+.rank-row{
+  display:flex;align-items:center;gap:13px;background:var(--card);border-radius:16px;
+  box-shadow:var(--sh-sm);padding:15px 16px;margin-bottom:10px;width:100%;text-align:left;transition:.16s;
+}
+.rank-row:active{transform:scale(.99)}
+.rank-row.top{box-shadow:var(--sh)}
+.medal{
+  flex:none;width:32px;height:32px;border-radius:11px;background:#f4f6fa;color:var(--ink3);
+  font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;
+}
+.medal.m1{background:linear-gradient(135deg,#ffd75e,#f7a928);color:#fff;box-shadow:0 4px 12px rgba(247,169,40,.35)}
+.medal.m2{background:linear-gradient(135deg,#dfe4ec,#aeb8c8);color:#fff}
+.medal.m3{background:linear-gradient(135deg,#f2b98f,#cd7a45);color:#fff}
+.rank-main{flex:1;min-width:0}
+.rank-name{font-size:16.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rank-sub{font-size:12px;color:var(--ink3);margin-top:3px}
+.rank-score{flex:none;text-align:right}
+.rank-score b{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
+.rank-score span{font-size:11px;color:var(--ink3);display:block;margin-top:0}
+.rank-detail{
+  margin:-4px 0 12px;padding:13px 16px;background:#fafbfd;border:1px solid var(--line);
+  border-radius:14px;font-size:13px;color:#475467;
+}
+.rank-detail .d-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
+.rank-detail .d-row b{color:var(--ink);flex:none}
+
+/* ---------- 底部导航 ---------- */
+.nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav button{
+  flex:1;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  font-size:11px;font-weight:600;color:var(--ink3);transition:.16s;
+}
+.nav button.on{color:var(--brand)}
+.nav svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- 弹层 ---------- */
+.mask{position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:40;backdrop-filter:blur(2px)}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--card);
+  border-radius:24px 24px 0 0;max-height:92vh;overflow-y:auto;
+  padding:8px 18px calc(22px + env(safe-area-inset-bottom));
+  transform:translateY(101%);transition:transform .28s cubic-bezier(.22,.8,.28,1);
+  box-shadow:0 -8px 40px rgba(16,24,40,.18);-webkit-overflow-scrolling:touch;
+}
+.sheet.show{transform:translateY(0)}
+.sheet-grab{width:38px;height:4.5px;border-radius:99px;background:#e4e7ec;margin:6px auto 12px}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sheet-name{font-size:21px;font-weight:700;letter-spacing:-.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-close{flex:none;font-size:13.5px;font-weight:600;color:var(--ink2);padding:7px 12px;border-radius:11px;background:#f4f6fa}
+.sheet-close:active{transform:scale(.95)}
+
+.grade-block{margin-top:20px}
+.grade-label{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px;letter-spacing:.2px}
+.grade-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.grade{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:16px 4px;
+  border-radius:15px;background:#f4f6fa;border:1.5px solid transparent;
+  font-size:15px;font-weight:600;color:var(--ink);transition:.16s;
+}
+.grade span{font-size:12px;font-weight:500;color:var(--ink3)}
+.grade:active{transform:scale(.96)}
+.grade.on{color:#fff;border-color:transparent}
+.grade.on span{color:rgba(255,255,255,.88)}
+.grade[data-i="0"].on{background:linear-gradient(135deg,#fb7a6e,#f04438);box-shadow:0 6px 16px rgba(240,68,56,.28)}
+.grade[data-i="1"].on{background:linear-gradient(135deg,#fbbf5c,#f79009);box-shadow:0 6px 16px rgba(247,144,9,.28)}
+.grade[data-i="2"].on{background:linear-gradient(135deg,#3ecf8e,#12b76a);box-shadow:0 6px 16px rgba(18,183,106,.28)}
+
+.total-line{
+  margin-top:20px;padding:14px 18px;border-radius:15px;background:#f4f6fb;
+  display:flex;align-items:center;justify-content:space-between;font-size:13.5px;color:var(--ink2);
+}
+.total-line b{font-size:23px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
+.btn-primary{
+  width:100%;margin-top:14px;padding:16px;border-radius:15px;
+  background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;font-size:16.5px;font-weight:700;
+  box-shadow:0 8px 20px rgba(74,108,247,.32);transition:.16s;
+}
+.btn-primary:disabled{background:#dfe3ec;box-shadow:none;color:#fff}
+.btn-primary:active{transform:scale(.985)}
+
+/* ---------- 管理弹层 ---------- */
+.m-sec{margin-top:22px}
+.add-row{display:flex;gap:9px;margin-bottom:12px}
+.add-row input{
+  flex:1;min-width:0;padding:12px 15px;border-radius:13px;border:1.5px solid var(--line);
+  background:#fafbfd;font-size:15px;color:var(--ink);outline:none;transition:.16s;
+}
+.add-row input:focus{border-color:var(--brand);background:#fff}
+.add-row input::placeholder{color:var(--ink3)}
+.add-row button{
+  flex:none;padding:0 20px;border-radius:13px;background:var(--ink);color:#fff;
+  font-size:14.5px;font-weight:600;transition:.16s;
+}
+.add-row button:active{transform:scale(.95)}
+.tag{
+  display:inline-flex;align-items:center;gap:7px;padding:8px 10px 8px 15px;border-radius:999px;
+  background:#f4f6fa;font-size:14.5px;font-weight:500;
+}
+.tag i{
+  width:19px;height:19px;border-radius:50%;background:#e4e7ec;color:var(--ink2);
+  font-style:normal;font-size:13px;line-height:19px;text-align:center;font-weight:700;
+}
+.tag i:active{background:#fda29b;color:#fff}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:rgba(16,24,40,.92);color:#fff;font-size:14px;padding:11px 22px;border-radius:999px;
+  z-index:90;max-width:82vw;text-align:center;box-shadow:0 8px 24px rgba(16,24,40,.25);
+}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-l">
+    <div class="appbar-title" id="topTitle">面试打分</div>
+    <div class="appbar-sub" id="topSub"></div>
+  </div>
+  <button class="pill-btn" id="switchBtn" hidden>切换</button>
+  <button class="icon-btn" id="manageBtn" title="管理名单">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</header>
+
+<main id="main"></main>
+
+<nav class="nav">
+  <button id="navScore" class="on">
+    <svg viewBox="0 0 24 24"><path d="M9 4h6v2H9z"/><path d="M15 5h2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2"/><path d="m9 13 2 2 4-4"/></svg>
+    打分
+  </button>
+  <button id="navRank">
+    <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>
+    排名
+  </button>
+</nav>
+
+<div class="mask" id="mask" hidden></div>
+<section class="sheet" id="sheet" hidden></section>
+<section class="sheet" id="msheet" hidden></section>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  var CFG = null, ME = null, MY = {}, VIEW = 'score', RANK = null, RANKG = null, MG = null;
+  var LS_KEY = 'interview_me_v1';
+  var API_BASE = location.pathname.replace(/[^\/]*$/, '');
+
+  function $(s) { return document.querySelector(s); }
+  function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function vib(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 12); } catch (e) {} }
+  function toast(m) {
+    var t = $('#toast'); t.textContent = m; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 1900);
+  }
+  function api(p, o) {
+    return fetch(API_BASE + p.replace(/^\//, ''), o).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (!r.ok) throw new Error((j && j.error) || ('请求失败 ' + r.status));
+        return j;
+      });
+    });
+  }
+  function groupById(id) { for (var i = 0; i < CFG.groups.length; i++) if (CFG.groups[i].id === id) return CFG.groups[i]; return null; }
+  function scoreOf(lv, k) { for (var i = 0; i < lv.length; i++) if (lv[i].key === k) return lv[i].score; return 0; }
+  function saveME() { try { localStorage.setItem(LS_KEY, JSON.stringify(ME)); } catch (e) {} }
+
+  /* ================= 启动 ================= */
+  function boot() {
+    api('/api/config').then(function (cfg) {
+      CFG = cfg;
+      var q = new URLSearchParams(location.search);
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) {}
+      var gid = q.get('g') || (saved && saved.groupId) || '';
+      var nm = q.get('n') || (saved && saved.interviewer) || '';
+      var g = groupById(gid);
+      if (g && g.interviewers.indexOf(nm) >= 0) {
+        ME = { groupId: gid, interviewer: nm };
+        saveME();
+        loadMine().then(render, render);
+      } else render();
+    }).catch(function (e) {
+      $('#main').innerHTML = '<div class="card hint warn">加载失败：' + esc(e.message) + '<br>请确认服务已启动。</div>';
+    });
+  }
+
+  function loadMine() {
+    return api('/api/mine?g=' + encodeURIComponent(ME.groupId) + '&i=' + encodeURIComponent(ME.interviewer))
+      .then(function (j) {
+        MY = {};
+        (j.list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
+      });
+  }
+
+  function render() {
+    $('#navScore').className = VIEW === 'score' ? 'on' : '';
+    $('#navRank').className = VIEW === 'rank' ? 'on' : '';
+    if (VIEW === 'score') renderScore(); else renderRank();
+  }
+
+  function emptyBox(text, icon) {
+    var icons = {
+      people: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>',
+      chart: '<svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>'
+    };
+    return '<div class="card empty">' + (icons[icon] || '') + '<div>' + text + '</div></div>';
+  }
+
+  /* ================= 打分页 ================= */
+  function renderScore() {
+    var main = $('#main'); main.innerHTML = '';
+    if (!ME) return renderSetup('', '');
+    var g = groupById(ME.groupId);
+    if (!g) { ME = null; return renderSetup('', ''); }
+
+    $('#topTitle').textContent = CFG.title || '面试打分';
+    $('#topSub').textContent = g.name + ' · 面试官 ' + ME.interviewer;
+    $('#switchBtn').hidden = false;
+
+    var total = g.candidates.length;
+    var done = 0;
+    g.candidates.forEach(function (c) { if (MY[c]) done++; });
+
+    if (!total) {
+      main.appendChild(el('div', 'card empty',
+        '本组还没有面试者<br><span style="font-size:13px">点右上角齿轮，添加今天要面试的人</span>'));
+      return;
+    }
+
+    var hero = el('div', 'hero');
+    hero.innerHTML =
+      '<div class="hero-top">' +
+        '<div><div class="hero-group">' + esc(g.name) + '</div>' +
+        '<div class="hero-iv">面试官 · ' + esc(ME.interviewer) + '</div></div>' +
+        '<div class="hero-num"><b>' + done + '</b><span>/' + total + '</span><em>已打分</em></div>' +
+      '</div>' +
+      '<div class="hero-bar"><i style="width:' + (done / total * 100) + '%"></i></div>';
+    main.appendChild(hero);
+
+    var list = el('div', 'list');
+    g.candidates.forEach(function (c, i) {
+      var s = MY[c];
+      var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
+      var row = el('button', 'cand' + (s ? ' done' : ''));
+      row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
+        '<span class="cand-name">' + esc(c) + '</span>' +
+        (s ? '<span class="cand-tag">' + t + ' 分</span>' : '<span class="cand-tag empty">未打分</span>') +
+        '<span class="cand-arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+      row.onclick = function () { openSheet(c); };
+      list.appendChild(row);
+    });
+    main.appendChild(list);
+  }
+
+  function renderSetup(preG, preN) {
+    var main = $('#main'); main.innerHTML = '';
+    $('#topTitle').textContent = CFG ? (CFG.title || '面试打分') : '面试打分';
+    $('#topSub').textContent = '请选择你的身份';
+    $('#switchBtn').hidden = true;
+
+    var c1 = el('div', 'card');
+    c1.appendChild(el('div', 'card-title', '① 你所在的组'));
+    var grid = el('div', 'group-grid');
+    CFG.groups.forEach(function (g) {
+      var b = el('button', 'group-btn' + (preG === g.id ? ' on' : ''),
+        esc(g.name) + '<span>' + g.candidates.length + ' 位面试者</span>');
+      b.onclick = function () { renderSetup(g.id, preN); };
+      grid.appendChild(b);
+    });
+    c1.appendChild(grid);
+    main.appendChild(c1);
+
+    var g = groupById(preG);
+    var c2 = el('div', 'card');
+    if (!g) c2.appendChild(el('div', 'hint', '请先选择你所在的组'));
+    else if (!g.interviewers.length) c2.appendChild(el('div', 'hint warn', '「' + esc(g.name) + '」还没有面试官，点右上角齿轮添加。'));
+    else {
+      c2.appendChild(el('div', 'card-title', '② 你的姓名'));
+      var wrap = el('div', 'chip-wrap');
+      g.interviewers.forEach(function (n) {
+        var b = el('button', 'chip' + (preN === n ? ' on' : ''), esc(n));
+        b.onclick = function () {
+          vib();
+          ME = { groupId: g.id, interviewer: n }; saveME();
+          loadMine().then(render, function (e) { toast(e.message); render(); });
+        };
+        wrap.appendChild(b);
+      });
+      c2.appendChild(wrap);
+    }
+    main.appendChild(c2);
+  }
+
+  /* ================= 打分面板 ================= */
+  function gradeBlock(title, dim, levels, cur) {
+    var h = '<div class="grade-block"><div class="grade-label">' + esc(title) + '</div><div class="grade-row">';
+    levels.forEach(function (lv, i) {
+      h += '<button class="grade' + (cur === lv.key ? ' on' : '') + '" data-i="' + i +
+        '" data-dim="' + dim + '" data-key="' + esc(lv.key) + '">' + esc(lv.label) + '<span>' + lv.score + '</span></button>';
+    });
+    return h + '</div></div>';
+  }
+
+  function openSheet(name) {
+    var prev = MY[name] || { e: null, w: null };
+    var pend = { e: prev.e, w: prev.w };
+
+    var sheet = $('#sheet');
+    sheet.innerHTML = '<div class="sheet-grab"></div>' +
+      '<div class="sheet-head"><div class="sheet-name">' + esc(name) + '</div>' +
+      '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
+      gradeBlock('表达能力', 'e', CFG.expressLevels, pend.e) +
+      gradeBlock('是否常来工作室', 'w', CFG.willingLevels, pend.w) +
+      '<div class="total-line"><span>本次合计</span><b id="totalNum">—</b></div>' +
+      '<button class="btn-primary" id="saveBtn" disabled>保存</button>';
+
+    showSheet('#sheet');
+
+    function refresh() {
+      var ok = !!(pend.e && pend.w);
+      $('#totalNum').textContent = ok ? (scoreOf(CFG.expressLevels, pend.e) + scoreOf(CFG.willingLevels, pend.w) + ' 分') : '—';
+      $('#saveBtn').disabled = !ok;
+    }
+
+    sheet.querySelectorAll('.grade').forEach(function (btn) {
+      btn.onclick = function () {
+        vib();
+        var dim = btn.getAttribute('data-dim');
+        pend[dim] = btn.getAttribute('data-key');
+        sheet.querySelectorAll('.grade[data-dim="' + dim + '"]').forEach(function (b) { b.classList.remove('on'); });
+        btn.classList.add('on');
+        refresh();
+      };
+    });
+
+    $('#sheetClose').onclick = hideSheets;
+    $('#saveBtn').onclick = function () {
+      $('#saveBtn').disabled = true;
+      api('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ g: ME.groupId, c: name, i: ME.interviewer, e: pend.e, w: pend.w })
+      }).then(function () {
+        MY[name] = { e: pend.e, w: pend.w };
+        vib(20); hideSheets(); renderScore(); toast('已保存');
+        setTimeout(function () {
+          var g = groupById(ME.groupId);
+          var idx = g.candidates.indexOf(name);
+          for (var k = 1; k <= g.candidates.length; k++) {
+            var nx = g.candidates[(idx + k) % g.candidates.length];
+            if (!MY[nx]) { openSheet(nx); return; }
+          }
+          toast('本组已全部打分完成');
+        }, 300);
+      }).catch(function (e) {
+        $('#saveBtn').disabled = false;
+        toast('保存失败：' + e.message);
+      });
+    };
+
+    refresh();
+  }
+
+  function showSheet(sel) {
+    hideSheets(true);
+    $('#mask').hidden = false;
+    var s = $(sel);
+    s.hidden = false;
+    requestAnimationFrame(function () { s.classList.add('show'); });
+  }
+  function hideSheets(keepMask) {
+    ['#sheet', '#msheet'].forEach(function (sel) {
+      var s = $(sel);
+      s.classList.remove('show');
+      if (!s.hidden) setTimeout(function () { s.hidden = true; s.innerHTML = ''; }, 280);
+    });
+    if (!keepMask) $('#mask').hidden = true;
+  }
+  $('#mask').onclick = function () { hideSheets(); };
+
+  /* ================= 排名页 ================= */
+  function renderRank() {
+    var main = $('#main'); main.innerHTML = '';
+    $('#switchBtn').hidden = true;
+    $('#topTitle').textContent = '平均分排名';
+    $('#topSub').textContent = '按同组所有面试官的平均分排序';
+    main.appendChild(el('div', 'card hint', '加载中…'));
+
+    api('/api/rank').then(function (j) {
+      RANK = j.groups || [];
+      if (!RANK.length) { main.innerHTML = ''; main.appendChild(el('div', 'card hint', '还没有组。')); return; }
+      var ok = false;
+      RANK.forEach(function (g) { if (g.groupId === RANKG) ok = true; });
+      if (!ok) RANKG = RANK[0].groupId;
+      paintRank();
+    }).catch(function (e) {
+      main.innerHTML = '';
+      main.appendChild(el('div', 'card hint warn', '加载失败：' + esc(e.message)));
+    });
+  }
+
+  function paintRank() {
+    var main = $('#main'); main.innerHTML = '';
+
+    var wrap = el('div', 'chip-wrap'); wrap.style.marginBottom = '14px';
+    RANK.forEach(function (g) {
+      var b = el('button', 'chip' + (RANKG === g.groupId ? ' on' : ''), esc(g.groupName));
+      b.onclick = function () { RANKG = g.groupId; paintRank(); };
+      wrap.appendChild(b);
+    });
+    main.appendChild(wrap);
+
+    var cur = RANK.filter(function (g) { return g.groupId === RANKG; })[0];
+    if (!cur) return;
+
+    if (!cur.rows.length) {
+      main.appendChild(el('div', 'card empty', '本组还没有面试者<br><span style="font-size:13px">点右上角齿轮添加</span>'));
+      return;
+    }
+    var any = false;
+    cur.rows.forEach(function (r) { if (r.count > 0) any = true; });
+    if (!any) { main.appendChild(el('div', 'card empty', '本组还没有人打分')); return; }
+
+    cur.rows.forEach(function (r) {
+      if (r.count === 0) {
+        var e2 = el('div', 'rank-row');
+        e2.innerHTML = '<div class="medal">—</div><div class="rank-main">' +
+          '<div class="rank-name">' + esc(r.name) + '</div>' +
+          '<div class="rank-sub">还没有面试官打分</div></div>';
+        main.appendChild(e2);
+        return;
+      }
+      var cls = r.rank === 1 ? ' m1' : r.rank === 2 ? ' m2' : r.rank === 3 ? ' m3' : '';
+      var row = el('button', 'rank-row' + (r.rank <= 3 ? ' top' : ''));
+      row.innerHTML = '<div class="medal' + cls + '">' + r.rank + '</div>' +
+        '<div class="rank-main"><div class="rank-name">' + esc(r.name) + '</div>' +
+        '<div class="rank-sub">' + r.count + '/' + r.total + ' 位面试官已打分 · 点击看明细</div></div>' +
+        '<div class="rank-score"><b>' + r.avg + '</b><span>平均分</span></div>';
+
+      var detail = el('div', 'rank-detail');
+      detail.hidden = true;
+      detail.innerHTML = r.detail.map(function (d) {
+        return '<div class="d-row"><span>' + esc(d.interviewer) + '　' + esc(d.expressLabel) + ' ' + d.expressScore +
+          ' + ' + esc(d.willingLabel) + ' ' + d.willingScore + '</span><b>' + d.total + '</b></div>';
+      }).join('');
+      row.onclick = function () { detail.hidden = !detail.hidden; };
+
+      main.appendChild(row);
+      main.appendChild(detail);
+    });
+  }
+
+  /* ================= 管理名单 ================= */
+  function openManage() {
+    MG = (ME && ME.groupId) || MG || CFG.groups[0].id;
+    paintManage();
+    showSheet('#msheet');
+  }
+
+  function paintManage() {
+    var sheet = $('#msheet');
+    sheet.innerHTML = '<div class="sheet-grab"></div>' +
+      '<div class="sheet-head"><div class="sheet-name">管理名单</div>' +
+      '<button class="sheet-close" id="mClose">关闭</button></div>' +
+      '<div class="m-sec"><div class="grade-label">选择组</div><div class="chip-wrap" id="mGroups"></div></div>' +
+      '<div class="m-sec"><div class="grade-label">面试官</div>' +
+        '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
+        '<div class="chip-wrap" id="mIvList"></div></div>' +
+      '<div class="m-sec"><div class="grade-label">面试者</div>' +
+        '<div class="add-row"><input id="mCd" maxlength="20" placeholder="输入面试者姓名"><button id="mCdAdd">添加</button></div>' +
+        '<div class="chip-wrap" id="mCdList"></div></div>';
+
+    $('#mClose').onclick = hideSheets;
+
+    var gWrap = $('#mGroups');
+    CFG.groups.forEach(function (g) {
+      var b = el('button', 'chip' + (MG === g.id ? ' on' : ''), esc(g.name));
+      b.onclick = function () { MG = g.id; paintManage(); };
+      gWrap.appendChild(b);
+    });
+
+    var g = groupById(MG);
+    function fill(listSel, arr, kind) {
+      var box = $(listSel);
+      if (!arr.length) { box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>'; return; }
+      arr.forEach(function (n) {
+        var t = el('span', 'tag', esc(n) + '<i>×</i>');
+        t.querySelector('i').onclick = function () {
+          if (!confirm('确定把「' + n + '」从' + g.name + '移除吗？\n该人相关的打分记录也会一并删除。')) return;
+          manage(kind, n, 'del');
+        };
+        box.appendChild(t);
+      });
+    }
+    fill('#mIvList', g.interviewers, 'iv');
+    fill('#mCdList', g.candidates, 'cd');
+
+    function bind(inputSel, btnSel, kind) {
+      var inp = $(inputSel);
+      function go() {
+        var v = inp.value.trim();
+        if (!v) return;
+        manage(kind, v, 'add');
+      }
+      $(btnSel).onclick = go;
+      inp.onkeydown = function (e) { if (e.key === 'Enter') go(); };
+    }
+    bind('#mIv', '#mIvAdd', 'iv');
+    bind('#mCd', '#mCdAdd', 'cd');
+  }
+
+  function manage(kind, name, op) {
+    return api('/api/manage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ g: MG, kind: kind, name: name, op: op })
+    }).then(function (j) {
+      CFG.groups = j.groups;
+      vib(18);
+      toast(op === 'add' ? '已添加' : '已移除');
+      // 自己的身份是否还有效
+      if (ME) {
+        var g = groupById(ME.groupId);
+        if (!g || g.interviewers.indexOf(ME.interviewer) < 0) {
+          ME = null; MY = {};
+          try { localStorage.removeItem(LS_KEY); } catch (e) {}
+        } else {
+          loadMine().then(function () { paintManage(); }, function () {});
+        }
+      }
+      paintManage();
+      if (VIEW === 'score' && !ME) renderSetup('', '');
+      else render();
+    }).catch(function (e) { toast(e.message); });
+  }
+
+  /* ================= 交互 ================= */
+  $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
+  $('#navRank').onclick = function () { VIEW = 'rank'; hideSheets(); render(); };
+  $('#manageBtn').onclick = function () { openManage(); };
+  $('#switchBtn').onclick = function () {
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    ME = null; MY = {}; VIEW = 'score';
+    render();
+  };
+
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "studio-interview-scorer",
+  "version": "1.0.0",
+  "description": "工作室面试打分系统 —— 面试官手机端点选打分，自动统计平均分排名",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "interview",
+    "scoring",
+    "mobile"
+  ],
+  "license": "UNLICENSED"
+}
