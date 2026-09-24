@@ -51,13 +51,23 @@ const SEED = {
     { id: 'r2', name: '第2轮' }
   ],
 
+  // 小组：每组配置自己的面试官（打分页进组后只列出本组的面试官）；
+  // 全局面试官池 = 各组名单的并集，在「管理 → 面试官」里维护
   groups: [
-    { id: 'g1', name: '第1组' },
-    { id: 'g2', name: '第2组' },
-    { id: 'g3', name: '第3组' },
-    { id: 'g4', name: '第4组' }
+    { id: 'g1', name: '第1组', interviewers: ['张洪涛', '张加美', '田丹', '冉娟'] },
+    { id: 'g2', name: '第2组', interviewers: ['申宇轩', '黄红强', '付博'] },
+    { id: 'g3', name: '第3组', interviewers: ['陈英开', '陈明峰', '骆丹'] },
+    { id: 'g4', name: '第4组', interviewers: ['马运福', '刘院明', '谌艳'] }
   ]
 };
+
+// 旧数据迁移用：没有按组配置面试官的老数据，按上面的名单自动补齐（只补一次，之后以 App 里维护的为准）
+const LEGACY_GROUP_IV = [
+  { match: ['g1', '第1组'], iv: ['张洪涛', '张加美', '田丹', '冉娟'] },
+  { match: ['g2', '第2组'], iv: ['申宇轩', '黄红强', '付博'] },
+  { match: ['g3', '第3组'], iv: ['陈英开', '陈明峰', '骆丹'] },
+  { match: ['g4', '第4组'], iv: ['马运福', '刘院明', '谌艳'] }
+];
 
 const PORT = Number(process.env.PORT || 3000);
 /* ====================================================================== */
@@ -115,12 +125,21 @@ function normalize(cfg) {
     cd.push(item);
   }
 
-  // 旧版把面试官挂在各个组里（按组隔离），这里全部并入全局名单
+  // 各组的面试官保留在组上（打分页进组后按组列出），同时并入全局面试官池
   (cfg.groups || []).forEach(function (g) {
     (Array.isArray(g.interviewers) ? g.interviewers : []).forEach(takeIv);
-    delete g.interviewers;
     (Array.isArray(g.candidates) ? g.candidates : []).forEach(takeCd);
     delete g.candidates;
+  });
+  // 老数据没有按组配置：按线上既定的 4 组名单自动补齐（只在字段缺失时补，App 里改过就不再动）
+  LEGACY_GROUP_IV.forEach(function (m) {
+    m.match.forEach(function (key) {
+      const g = cfg.groups.find(function (x) { return x.id === key || x.name === key; });
+      if (g && !Array.isArray(g.interviewers)) {
+        g.interviewers = m.iv.slice();
+        m.iv.forEach(takeIv);
+      }
+    });
   });
   (Array.isArray(cfg.interviewers) ? cfg.interviewers : []).forEach(takeIv);
   (Array.isArray(cfg.candidates) ? cfg.candidates : []).forEach(takeCd);
@@ -136,12 +155,16 @@ function normalize(cfg) {
     });
   }
 
-  // 小组：分场面试用，可在 App 里增删
+  // 小组：分场面试用，可在 App 里增删；每组配置自己的面试官
   if (!Array.isArray(cfg.groups) || !cfg.groups.length) {
-    cfg.groups = SEED.groups.map(function (g) { return { id: g.id, name: g.name }; });
+    cfg.groups = SEED.groups.map(function (g) { return { id: g.id, name: g.name, interviewers: (g.interviewers || []).slice() }; });
   } else {
     cfg.groups = cfg.groups.map(function (g) {
-      return { id: str(g && g.id) || 'g_' + crypto.randomBytes(3).toString('hex'), name: str(g && g.name) || '小组' };
+      return {
+        id: str(g && g.id) || 'g_' + crypto.randomBytes(3).toString('hex'),
+        name: str(g && g.name) || '小组',
+        interviewers: Array.isArray(g.interviewers) ? g.interviewers : []
+      };
     });
   }
 
@@ -474,8 +497,13 @@ const server = http.createServer(function (req, res) {
       const rd = findRound(d.r) || CONFIG.rounds[0];
       const g = findGroup(d.g);
       if (!g) return json(res, 400, { error: '组不存在' });
-      if (!CONFIG.interviewers.length) return json(res, 400, { error: '还没有面试官，先到右上角添加' });
-      if (CONFIG.interviewers.indexOf(d.i) < 0) return json(res, 400, { error: '面试官不在名单中' });
+      // 面试官校验：该组配置了面试官名单时，只能由本组配置的人打分；没配置的组回落到全局面试官池
+      const gIv = Array.isArray(g.interviewers) ? g.interviewers : [];
+      if (gIv.length) {
+        if (gIv.indexOf(d.i) < 0) return json(res, 400, { error: '「' + d.i + '」不在' + g.name + '的面试官配置里' });
+      } else if (CONFIG.interviewers.length && CONFIG.interviewers.indexOf(d.i) < 0) {
+        return json(res, 400, { error: '面试官不在名单中' });
+      }
       if (!CONFIG.candidates.some(function (c) { return c.id === d.c; })) {
         return json(res, 400, { error: '面试者不在名单中' });
       }
@@ -587,7 +615,10 @@ const server = http.createServer(function (req, res) {
           const idx = CONFIG.interviewers.indexOf(name);
           if (idx < 0) return json(res, 400, { error: '名单里没有这个名字' });
           CONFIG.interviewers.splice(idx, 1);
-          // 同步清掉此人在所有组里的打分，避免残留分数干扰排名
+          // 同步从各小组的面试官配置里移除，并清掉此人在所有组里的打分
+          CONFIG.groups.forEach(function (g) {
+            if (Array.isArray(g.interviewers)) g.interviewers = g.interviewers.filter(function (n) { return n !== name; });
+          });
           scores = scores.filter(function (s) { return s.i !== name; });
           writeJSON(SCORES_FILE, scores);
         } else {
@@ -644,7 +675,7 @@ const server = http.createServer(function (req, res) {
         return json(res, 400, { error: '操作错误' });
       }
 
-      /* --- 小组：分场面试用，增删即可；删组时该组所有轮次的分数一并清除 --- */
+      /* --- 小组：分场面试用，每组配置自己的面试官 --- */
       if (d.kind === 'gp') {
         const gps = CONFIG.groups;
         if (d.op === 'add') {
@@ -653,7 +684,7 @@ const server = http.createServer(function (req, res) {
           if (gps.some(function (x) { return x.name === name; })) {
             return json(res, 400, { error: '已经有「' + name + '」了' });
           }
-          gps.push({ id: 'g_' + crypto.randomBytes(3).toString('hex'), name: name });
+          gps.push({ id: 'g_' + crypto.randomBytes(3).toString('hex'), name: name, interviewers: [] });
         } else if (d.op === 'del') {
           if (gps.length <= 1) return json(res, 400, { error: '至少保留一个小组' });
           const id = str(d.id);
@@ -663,6 +694,22 @@ const server = http.createServer(function (req, res) {
           // 同步清掉该组所有轮次里的打分
           scores = scores.filter(function (s) { return s.g !== id; });
           writeJSON(SCORES_FILE, scores);
+        } else if (d.op === 'iv-add') {
+          const g = gps.find(function (x) { return x.id === str(d.id); });
+          if (!g) return json(res, 400, { error: '小组不存在' });
+          const name = str(d.name);
+          if (CONFIG.interviewers.indexOf(name) < 0) {
+            return json(res, 400, { error: '请先在「面试官」里添加「' + name + '」' });
+          }
+          if (!Array.isArray(g.interviewers)) g.interviewers = [];
+          if (g.interviewers.indexOf(name) >= 0) return json(res, 400, { error: '该组已有「' + name + '」' });
+          g.interviewers.push(name);
+        } else if (d.op === 'iv-del') {
+          const g = gps.find(function (x) { return x.id === str(d.id); });
+          if (!g) return json(res, 400, { error: '小组不存在' });
+          const name = str(d.name);
+          if (!Array.isArray(g.interviewers)) g.interviewers = [];
+          g.interviewers = g.interviewers.filter(function (n) { return n !== name; });
         } else {
           return json(res, 400, { error: '操作错误' });
         }

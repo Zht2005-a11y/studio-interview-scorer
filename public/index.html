@@ -105,6 +105,7 @@ main{padding:4px 14px 100px}
 }
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .chip:active{transform:scale(.96)}
+.add-chip{background:#e8f0fe;color:var(--brand);font-weight:600}
 
 /* ---------- 面试者列表 ---------- */
 .list{display:flex;flex-direction:column;gap:10px}
@@ -350,6 +351,7 @@ main{padding:4px 14px 100px}
   var CURGROUP = null;    // 当前进入的组
   var CURROUND = null;    // 当前轮次（打分/排名共用；轮次只区分分数归属，组与面试官配置不变）
   var VIEW = 'score';     // score | rank | manage
+  var MANAGE_SEC = null;  // 管理页当前子页：null(入口) | iv | dim | gp | rd
   var DIM_DRAFT = [];     // 新增打分项的等级草稿（行内添加，未创建）
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
@@ -483,11 +485,12 @@ main{padding:4px 14px 100px}
 
     var list = el('div', 'list');
     CFG.groups.forEach(function (g, i) {
+      var gIv = Array.isArray(g.interviewers) ? g.interviewers : [];
       var card = el('button', 'gcard');
       card.innerHTML =
         '<span class="gbadge">' + (i + 1) + '</span>' +
         '<span class="gmain"><span class="gname">' + esc(g.name) + '</span>' +
-        '<span class="gmeta">进入打分 · 面试官 ' + CFG.interviewers.length + ' 人共用 · ' + ((CFG.rounds || []).length || 1) + ' 轮</span></span>' +
+        '<span class="gmeta">进入打分 · ' + (gIv.length ? gIv.length + ' 位面试官' : '未配置面试官') + ' · ' + ((CFG.rounds || []).length || 1) + ' 轮</span></span>' +
         '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
       card.onclick = function () { vib(); CURGROUP = g.id; render(); };
       list.appendChild(card);
@@ -520,6 +523,8 @@ main{padding:4px 14px 100px}
     $('#topTitle').textContent = g.name;
 
     if (!meOK()) return renderPickIdentity(g);
+    var gIv = Array.isArray(g.interviewers) ? g.interviewers : [];
+    if (gIv.length && gIv.indexOf(ME.interviewer) < 0) return renderPickIdentity(g);
     if (MYG !== g.id + '|' + CURROUND) {
       // 换到另一个组/另一轮，重新拉当前「组+轮次」里我打的分
       MYG = g.id + '|' + CURROUND;
@@ -529,21 +534,22 @@ main{padding:4px 14px 100px}
     renderCandidates(g);
   }
 
-  /* --- 选一次自己是谁（全局名单，任何组通用） --- */
+  /* --- 选一次自己是谁（只列出本组配置的面试官） --- */
   function renderPickIdentity(g) {
-    $('#topSub').textContent = '请选择你是哪位面试官';
+    var gIv = Array.isArray(g.interviewers) ? g.interviewers : [];
+    $('#topSub').textContent = g.name + ' · 请选择你是哪位面试官';
     var main = $('#main'); main.innerHTML = '';
 
-    if (!CFG.interviewers.length) {
+    if (!gIv.length) {
       main.appendChild(el('div', 'card hint warn',
-        '还没有面试官，点底部「管理」添加。'));
+        '「' + esc(g.name) + '」还没有配置面试官。<br>点底部「管理 → 小组」，进本组把面试官添加进来，再回来打分。'));
       return;
     }
 
     var card = el('div', 'card');
-    card.appendChild(el('div', 'card-title', '你是哪位面试官？'));
+    card.appendChild(el('div', 'card-title', '你是哪位面试官？（' + esc(g.name) + '）'));
     var wrap = el('div', 'chip-wrap');
-    CFG.interviewers.forEach(function (n) {
+    gIv.forEach(function (n) {
       var b = el('button', 'chip', esc(n));
       b.onclick = function () {
         vib();
@@ -555,7 +561,7 @@ main{padding:4px 14px 100px}
       wrap.appendChild(b);
     });
     card.appendChild(wrap);
-    card.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">只需选一次，之后这台手机会自动记住，在任何小组都通用。</span>'));
+    card.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">只需选一次，之后这台手机会自动记住；换到没配置你的小组时会重新选择。</span>'));
     main.appendChild(card);
   }
 
@@ -876,17 +882,52 @@ main{padding:4px 14px 100px}
     });
   }
 
-  /* ================= 管理（面试官 / 打分项 / 轮次，全局共用）：底部导航第三个 tab，整页渲染 ================= */
+  /* ================= 管理（底部导航第三个 tab）：4 个管理对象，各一个入口 ================= */
   function renderManage() {
+    if (MANAGE_SEC === 'iv') return manageIv();
+    if (MANAGE_SEC === 'dim') return manageDim();
+    if (MANAGE_SEC === 'gp') return manageGp();
+    if (MANAGE_SEC === 'rd') return manageRd();
+
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = '管理';
-    $('#topSub').textContent = '面试官 · 打分项 · 小组 · 轮次，增删即时生效';
+    $('#topSub').textContent = '面试官 · 打分项 · 小组 · 轮次';
 
-    /* --- 面试官 --- */
+    var defs = [
+      { key: 'iv',  name: '面试官', meta: '全局名单共 ' + CFG.interviewers.length + ' 人 · 在「小组」里配置谁参与打分' },
+      { key: 'dim', name: '打分项', meta: (CFG.dimensions || []).length + ' 项 · 等级名称 / 分值可编辑' },
+      { key: 'gp',  name: '小组',   meta: (CFG.groups || []).length + ' 组 · 每组配置自己的面试官，删组清分数' },
+      { key: 'rd',  name: '轮次',   meta: (CFG.rounds || []).length + ' 轮 · 分数按轮隔离统计，删轮清分数' }
+    ];
+    var list = el('div', 'list');
+    defs.forEach(function (d) {
+      var card = el('button', 'gcard');
+      card.innerHTML =
+        '<span class="gmain"><span class="gname">' + d.name + '</span>' +
+        '<span class="gmeta">' + d.meta + '</span></span>' +
+        '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+      card.onclick = function () { vib(); MANAGE_SEC = d.key; renderManage(); };
+      list.appendChild(card);
+    });
+    main.appendChild(list);
+  }
+
+  function secHead(title, sub) {
+    $('#backBtn').hidden = false;
+    $('#topTitle').textContent = title;
+    $('#topSub').textContent = sub;
+    var main = $('#main'); main.innerHTML = '';
+    return main;
+  }
+
+  /* --- 面试官（全局名单池） --- */
+  function manageIv() {
+    secHead('面试官', '全局名单池 · 在「小组」里配置谁参与打分');
+    var main = $('#main'); main.innerHTML = '';
     var cIv = el('div', 'card');
     cIv.innerHTML =
-      '<div class="card-title">面试官（点 × 移除）</div>' +
+      '<div class="card-title">面试官（点 × 移除，同时移出所有小组并删除其打分）</div>' +
       '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
       '<div class="chip-wrap" id="mIvList"></div>';
     main.appendChild(cIv);
@@ -897,7 +938,7 @@ main{padding:4px 14px 100px}
       CFG.interviewers.forEach(function (n) {
         var t = el('span', 'tag', esc(n) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + n + '」移除？\n他/她在所有组里的打分记录也会一并删除。')) return;
+          if (!confirm('把「' + n + '」移除？\n他/她在所有小组里的配置和打分记录也会一并删除。')) return;
           manage('iv', n, 'del');
         };
         box.appendChild(t);
@@ -911,8 +952,11 @@ main{padding:4px 14px 100px}
     }
     $('#mIvAdd').onclick = addIv;
     ivInp.onkeydown = function (e) { if (e.key === 'Enter') addIv(); };
+  }
 
-    /* --- 打分项 --- */
+  /* --- 打分项 --- */
+  function manageDim() {
+    var main = secHead('打分项', '每项若干等级，等级名称 / 分值可单独编辑');
     var cDim = el('div', 'card');
     cDim.innerHTML =
       '<div class="card-title">打分项（点 ✎ 改等级名称/分值；点 × 删除，该项在所有打分里的分数一并移除）</div>' +
@@ -987,38 +1031,96 @@ main{padding:4px 14px 100px}
     $('#dName').onkeydown = function (e) { if (e.key === 'Enter') addDim(); };
 
     /* 等级编辑器在弹窗里（见 openLevelEditor） */
+  }
 
-    /* --- 小组 --- */
-    var cGp = el('div', 'card');
-    cGp.innerHTML =
-      '<div class="card-title">面试小组（分场面试用；点 × 删除，该组所有轮次里的分数一并移除）</div>' +
-      '<div class="add-row"><input id="gpName" maxlength="10" placeholder="组名，如 第5组（留空自动编号）"><button id="gpAdd">添加</button></div>' +
-      '<div class="chip-wrap" id="gpList"></div>';
-    main.appendChild(cGp);
-    var gbox = $('#gpList');
-    var gps = CFG.groups || [];
-    if (!gps.length) {
-      gbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有小组</span>';
-    } else {
-      gps.forEach(function (gp) {
-        var canDel = gps.length > 1;
-        var t = el('span', 'tag', esc(gp.name) + (canDel ? '<i>×</i>' : ''));
-        if (canDel) t.querySelector('i').onclick = function () {
-          if (!confirm('删除「' + gp.name + '」？\n该组所有轮次里的打分记录会一并移除。')) return;
-          gpManage('del', { id: gp.id });
-        };
-        gbox.appendChild(t);
-      });
-    }
+  /* --- 小组（每组配置自己的面试官） --- */
+  function manageGp() {
+    var main = secHead('小组', '每组配置自己的面试官，打分时只能选本组的人');
+
+    var cAdd = el('div', 'card');
+    cAdd.innerHTML =
+      '<div class="card-title">添加小组（留空自动编号，新组默认不配面试官）</div>' +
+      '<div class="add-row"><input id="gpName" maxlength="10" placeholder="组名，如 第5组"><button id="gpAdd">添加</button></div>';
+    main.appendChild(cAdd);
     function addGp() {
-      var inp = $('#gpName');
-      var v = inp.value.trim();
+      var v = $('#gpName').value.trim();
       gpManage('add', { name: v });
     }
     $('#gpAdd').onclick = addGp;
     $('#gpName').onkeydown = function (e) { if (e.key === 'Enter') addGp(); };
 
-    /* --- 轮次 --- */
+    var list = el('div', 'list');
+    (CFG.groups || []).forEach(function (g) {
+      var gIv = Array.isArray(g.interviewers) ? g.interviewers : [];
+      var card = el('button', 'gcard');
+      card.innerHTML =
+        '<span class="gmain"><span class="gname">' + esc(g.name) + '</span>' +
+        '<span class="gmeta">' + (gIv.length ? gIv.length + ' 位面试官：' + gIv.join('、') : '还没配置面试官') + '</span></span>' +
+        '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+      card.onclick = function () { vib(); openGroupEditor(g.id); };
+      list.appendChild(card);
+    });
+    main.appendChild(list);
+
+    var cDel = el('div', 'card');
+    cDel.innerHTML =
+      '<div class="card-title">删除小组（点 × 删除，该组所有轮次里的分数一并移除）</div>' +
+      '<div class="chip-wrap" id="gpList"></div>';
+    main.appendChild(cDel);
+    var gbox = $('#gpList');
+    var gps = CFG.groups || [];
+    gps.forEach(function (gp) {
+      var canDel = gps.length > 1;
+      var t = el('span', 'tag', esc(gp.name) + (canDel ? '<i>×</i>' : ''));
+      if (canDel) t.querySelector('i').onclick = function () {
+        if (!confirm('删除「' + gp.name + '」？\n该组所有轮次里的打分记录会一并移除。')) return;
+        gpManage('del', { id: gp.id });
+      };
+      gbox.appendChild(t);
+    });
+  }
+
+  /* 小组的面试官配置（弹窗）：本组名单 + 从全局面试官池里选人来 */
+  function openGroupEditor(id) {
+    var g = groupById(id);
+    if (!g) return;
+    var sheet = $('#dsheet');
+    function paint() {
+      g = groupById(id);
+      var inG = Array.isArray(g.interviewers) ? g.interviewers : [];
+      var pool = CFG.interviewers.filter(function (n) { return inG.indexOf(n) < 0; });
+      sheet.innerHTML = '<div class="sheet-grab"></div>' +
+        '<div class="sheet-head"><div><div class="sheet-name">' + esc(g.name) + ' · 面试官配置</div>' +
+        '<div class="sheet-sub">打分页进本组时，只列出这里配置的面试官</div></div>' +
+        '<button class="sheet-close" id="gClose">关闭</button></div>' +
+        '<div class="m-sec"><div class="grade-label">本组面试官（点 × 移出本组）</div>' +
+        '<div class="chip-wrap">' + (inG.length ? inG.map(function (n) {
+          return '<span class="tag">' + esc(n) + '<i data-nm="' + esc(n) + '">×</i></span>';
+        }).join('') : '<span style="color:#98a2b3;font-size:13.5px">本组还没有配置面试官</span>') + '</div></div>' +
+        '<div class="m-sec"><div class="grade-label">从面试官名单添加（点名字加入本组）</div>' +
+        '<div class="chip-wrap">' + (pool.length ? pool.map(function (n) {
+          return '<button class="chip add-chip" data-nm="' + esc(n) + '">＋ ' + esc(n) + '</button>';
+        }).join('') : '<span style="color:#98a2b3;font-size:13.5px">名单里的人都已在本组</span>') + '</div></div>';
+      sheet.querySelectorAll('i[data-nm]').forEach(function (x) {
+        x.onclick = function () {
+          gpManage('iv-del', { id: id, name: x.getAttribute('data-nm') }).then(function () { if (!$('#dsheet').hidden) paint(); });
+        };
+      });
+      sheet.querySelectorAll('.add-chip').forEach(function (x) {
+        x.onclick = function () {
+          vib();
+          gpManage('iv-add', { id: id, name: x.getAttribute('data-nm') }).then(function () { if (!$('#dsheet').hidden) paint(); });
+        };
+      });
+      $('#gClose').onclick = hideSheets;
+    }
+    paint();
+    showSheet('#dsheet');
+  }
+
+  /* --- 轮次 --- */
+  function manageRd() {
+    var main = secHead('轮次', '各轮共用同一套小组与面试官，分数按轮分开统计');
     var cRd = el('div', 'card');
     cRd.innerHTML =
       '<div class="card-title">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
@@ -1065,14 +1167,17 @@ main{padding:4px 14px 100px}
       .catch(function (e) { toast(e.message); throw e; });
   }
 
-  /* 小组管理（分场面试用；删组会清掉该组所有轮次的分数） */
+  /* 小组管理（增删小组；iv-add / iv-del 配置小组的面试官） */
   function gpManage(op, payload) {
     var body = { kind: 'gp', op: op };
     Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
     return post('/api/manage', body).then(function (j) {
       CFG.groups = j.groups;
       vib(18);
-      toast(op === 'add' ? '小组已添加' : '小组已删除');
+      if (op === 'add') toast('小组已添加');
+      else if (op === 'del') toast('小组已删除');
+      else if (op === 'iv-add') toast('已加入该组');
+      else if (op === 'iv-del') toast('已移出该组');
       if (op === 'del' && CURGROUP && !groupById(CURGROUP)) {
         // 当前所在的组被删了，回首页
         CURGROUP = null; MY = {}; MYG = null;
@@ -1201,7 +1306,12 @@ main{padding:4px 14px 100px}
   $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
   $('#navRank').onclick = function () { VIEW = 'rank'; hideSheets(); render(); };
   $('#navManage').onclick = function () { VIEW = 'manage'; hideSheets(); render(); };
-  $('#backBtn').onclick = function () { CURGROUP = null; hideSheets(); render(); };
+  $('#backBtn').onclick = function () {
+    hideSheets();
+    if (VIEW === 'manage' && MANAGE_SEC) { MANAGE_SEC = null; renderManage(); return; }
+    CURGROUP = null;
+    render();
+  };
 
   boot();
 })();
