@@ -512,6 +512,9 @@ const server = http.createServer(function (req, res) {
                         { kind:'rd', op:'del', id }      删除该轮全部打分
      打分项（动态维度，每项若干等级 { label, score }）：
                         { kind:'dim', op:'add', name, levels:[{label,score}, ...] }
+                        { kind:'dim', op:'edit', id, levels:[{key?,label,score}, ...] }
+                                                                  改等级名称/分值；历史分数引用的 key 不变，
+                                                                  排名按新分值即时重算
                         { kind:'dim', op:'del', id }      删除该打分项及其在所有打分里的分数 */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
@@ -662,6 +665,26 @@ const server = http.createServer(function (req, res) {
           if (!levels.length) return json(res, 400, { error: '至少需要一个等级（格式：等级名 分值，每行一个）' });
           if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
           dims.push({ id: 'd_' + crypto.randomBytes(3).toString('hex'), name: name, levels: levels });
+        } else if (d.op === 'edit') {
+          const id = str(d.id);
+          const dim = dims.find(function (x) { return x.id === id; });
+          if (!dim) return json(res, 400, { error: '打分项不存在' });
+          const rawLv = Array.isArray(d.levels) ? d.levels : [];
+          const levels = [];
+          const usedKeys = Object.create(null);
+          rawLv.forEach(function (lv) {
+            const label = str(lv && lv.label);
+            const sc = Number(lv && lv.score);
+            if (!label || label.length > 10 || !isFinite(sc) || sc < 0 || sc > 999) return;
+            let key = str(lv && lv.key);
+            if (!key || usedKeys[key]) key = 'k_' + crypto.randomBytes(2).toString('hex');
+            usedKeys[key] = 1;
+            levels.push({ key: key, label: label, score: Math.round(sc) });
+          });
+          if (!levels.length) return json(res, 400, { error: '至少保留一个等级' });
+          if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
+          dim.levels = levels;
+          // 等级改了分值，历史打分记录里的等级 key 不变，排名会按新分值即时重算
         } else if (d.op === 'del') {
           if (dims.length <= 1) return json(res, 400, { error: '至少保留一个打分项' });
           const id = str(d.id);

@@ -248,6 +248,32 @@ main{padding:4px 14px 100px}
   font-style:normal;font-size:13px;line-height:20px;text-align:center;font-weight:700;
 }
 .tag i:active{background:#fda29b;color:#fff}
+.tag .i-ed{background:#e8f0fe;color:var(--brand)}
+.tag .i-ed:active{background:#c7d7fb}
+
+/* ---------- 打分项等级编辑 ---------- */
+.lv-row{display:flex;gap:8px;margin-bottom:9px;align-items:center}
+.lv-row input{
+  flex:1;min-width:0;padding:11px 12px;border-radius:11px;border:1.5px solid var(--line);
+  background:#fafbfd;font-size:15px;color:var(--ink);outline:none;transition:.16s;
+}
+.lv-row input:focus{border-color:var(--brand);background:#fff}
+.lv-row input.lv-score{flex:0 0 72px;text-align:center;font-weight:700}
+.lv-row .lv-del{
+  flex:none;width:34px;height:34px;border-radius:10px;background:#f4f6fa;color:var(--ink3);
+  font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;
+}
+.lv-row .lv-del:active{background:#fde8e8;color:var(--bad)}
+.lv-add{
+  width:100%;margin-top:2px;padding:12px;border-radius:13px;background:#f4f6fa;
+  font-size:14.5px;font-weight:600;color:var(--ink2);
+}
+.lv-add:active{transform:scale(.985)}
+.btn-row{display:flex;gap:9px;margin-top:14px}
+.btn-row button{flex:1;padding:13px;border-radius:13px;font-size:15px;font-weight:600;transition:.16s}
+.btn-row .b-cancel{background:#f4f6fa;color:var(--ink2)}
+.btn-row .b-save{background:var(--ink);color:#fff}
+.btn-row button:active{transform:scale(.98)}
 
 /* ---------- 首页「面试者名单」入口 / 批量导入 ---------- */
 .gbadge.add{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 16px rgba(18,183,106,.28)}
@@ -323,6 +349,7 @@ main{padding:4px 14px 100px}
   var CURGROUP = null;    // 当前进入的组
   var CURROUND = null;    // 当前轮次（打分/排名共用；轮次只区分分数归属，组与面试官配置不变）
   var VIEW = 'score';     // score | rank | manage
+  var EDITDIM = null;    // 管理页正在编辑等级的打分项 id
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
@@ -888,7 +915,7 @@ main{padding:4px 14px 100px}
     /* --- 打分项 --- */
     var cDim = el('div', 'card');
     cDim.innerHTML =
-      '<div class="card-title">打分项（点 × 删除，该项在所有打分里的分数一并移除）</div>' +
+      '<div class="card-title">打分项（点 ✎ 改等级名称/分值；点 × 删除，该项在所有打分里的分数一并移除）</div>' +
       '<div class="add-row"><input id="dName" maxlength="10" placeholder="名称，如 项目经验"><button id="dAdd">添加</button></div>' +
       '<textarea id="dLv" class="lv-text" placeholder="每行一个等级：等级名 分值（空格分隔）&#10;例如：&#10;偏弱 60&#10;良好 75&#10;优秀 90"></textarea>' +
       '<div class="chip-wrap dim-list" id="dList"></div>';
@@ -901,8 +928,13 @@ main{padding:4px 14px 100px}
       dims.forEach(function (dm) {
         var canDel = dims.length > 1;
         var lvTxt = dm.levels.map(function (lv) { return esc(lv.label) + lv.score; }).join(' / ');
-        var t = el('span', 'tag', esc(dm.name) + '（' + lvTxt + '）' + (canDel ? '<i>×</i>' : ''));
-        if (canDel) t.querySelector('i').onclick = function () {
+        var t = el('span', 'tag', esc(dm.name) + '（' + lvTxt + '）' + '<i class="i-ed">✎</i>' + (canDel ? '<i>×</i>' : ''));
+        t.querySelector('.i-ed').onclick = function () {
+          vib();
+          EDITDIM = dm.id;
+          renderManage();
+        };
+        if (canDel) t.querySelector('i:not(.i-ed)').onclick = function () {
           if (!confirm('删除「' + dm.name + '」？\n它在所有打分记录里的分数会一并移除。')) return;
           dimManage('del', { id: dm.id });
         };
@@ -926,6 +958,62 @@ main{padding:4px 14px 100px}
     }
     $('#dAdd').onclick = addDim;
     $('#dName').onkeydown = function (e) { if (e.key === 'Enter') addDim(); };
+
+    /* --- 编辑某个打分项的等级（名称 / 分值灵活配置，历史分数按新分值重算） --- */
+    var ed = dims.find(function (x) { return x.id === EDITDIM; });
+    if (ed) {
+      var cEd = el('div', 'card dim-editor');
+      cEd.innerHTML =
+        '<div class="card-title">编辑「' + esc(ed.name) + '」的等级</div>' +
+        '<div id="lvRows"></div>' +
+        '<button class="lv-add" id="lvAdd">＋ 添加等级</button>' +
+        '<div class="hint" style="margin-top:10px"><span style="font-size:12.5px;color:#98a2b3">每个打分项 1~6 个等级，分值 0~999。保存后历史分数按新分值即时重算排名。</span></div>' +
+        '<div class="btn-row"><button class="b-cancel" id="lvCancel">取消</button><button class="b-save" id="lvSave">保存</button></div>';
+      main.appendChild(cEd);
+      var rows = $('#lvRows');
+      var cur = ed.levels.map(function (l) { return { key: l.key, label: l.label, score: l.score }; });
+      function drawRows() {
+        rows.innerHTML = '';
+        cur.forEach(function (lv) {
+          var r = el('div', 'lv-row');
+          r.innerHTML = '<input class="lv-l" maxlength="10" value="' + esc(lv.label) + '">' +
+            '<input class="lv-score" maxlength="4" value="' + lv.score + '">' +
+            '<button class="lv-del">×</button>';
+          r.querySelector('.lv-del').onclick = function () {
+            cur.splice(cur.indexOf(lv), 1);
+            drawRows();
+          };
+          rows.appendChild(r);
+        });
+      }
+      drawRows();
+      $('#lvAdd').onclick = function () {
+        if (cur.length >= 6) { toast('最多 6 个等级'); return; }
+        cur.push({ key: '', label: '', score: 0 });
+        drawRows();
+        var last = rows.lastElementChild;
+        if (last) last.querySelector('.lv-l').focus();
+      };
+      $('#lvCancel').onclick = function () { EDITDIM = null; renderManage(); };
+      $('#lvSave').onclick = function () {
+        var lv = [];
+        var rowEls = rows.querySelectorAll('.lv-row');
+        for (var ri = 0; ri < rowEls.length; ri++) {
+          var lab = rowEls[ri].querySelector('.lv-l').value.trim();
+          var sco = Number(rowEls[ri].querySelector('.lv-score').value);
+          if (!lab || lab.length > 10 || !isFinite(sco) || sco < 0 || sco > 999) {
+            toast('请检查：等级名 1~10 字，分值 0~999');
+            return;
+          }
+          lv.push({ key: cur[ri] ? cur[ri].key : '', label: lab, score: Math.round(sco) });
+        }
+        if (!lv.length) { toast('至少保留一个等级'); return; }
+        dimManage('edit', { id: ed.id, levels: lv }).then(function () {
+          EDITDIM = null;
+          if (VIEW === 'manage') renderManage();
+        });
+      };
+    }
 
     /* --- 小组 --- */
     var cGp = el('div', 'card');
@@ -1049,7 +1137,7 @@ main{padding:4px 14px 100px}
     return post('/api/manage', body).then(function (j) {
       CFG.dimensions = j.dimensions;
       vib(18);
-      toast(op === 'add' ? '打分项已添加' : '打分项已删除');
+      toast(op === 'add' ? '打分项已添加' : op === 'edit' ? '打分项已更新' : '打分项已删除');
       MY = {}; MYG = null;   // 重新拉自己的分，清掉已删项的残留 key
       if (VIEW === 'rank') renderRank(); else render();
       return j;
