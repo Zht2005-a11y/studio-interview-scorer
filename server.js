@@ -136,6 +136,15 @@ function normalize(cfg) {
     });
   }
 
+  // 小组：分场面试用，可在 App 里增删
+  if (!Array.isArray(cfg.groups) || !cfg.groups.length) {
+    cfg.groups = SEED.groups.map(function (g) { return { id: g.id, name: g.name }; });
+  } else {
+    cfg.groups = cfg.groups.map(function (g) {
+      return { id: str(g && g.id) || 'g_' + crypto.randomBytes(3).toString('hex'), name: str(g && g.name) || '小组' };
+    });
+  }
+
   // 打分项：旧版固定两个（expressLevels / willingLevels），统一成动态 dimensions
   const normLv = function (lv, i) {
     return {
@@ -496,6 +505,8 @@ const server = http.createServer(function (req, res) {
      面试者（全局共用）：{ kind:'cd', op:'add', name, cls }
                         { kind:'cd', op:'del', id }
                         { kind:'cd', op:'batch', items:[{name,cls}, ...] }
+     小组（分场面试，只在组内记分）：{ kind:'gp', op:'add', name? }  不传 name 自动编号「第N组」
+                                      { kind:'gp', op:'del', id }    删除该组所有轮次里的打分
      轮次（各轮共用同一套小组与面试官，分数按轮分开）：
                         { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」
                         { kind:'rd', op:'del', id }      删除该轮全部打分
@@ -575,6 +586,32 @@ const server = http.createServer(function (req, res) {
         }
 
         return json(res, 400, { error: '操作错误' });
+      }
+
+      /* --- 小组：分场面试用，增删即可；删组时该组所有轮次的分数一并清除 --- */
+      if (d.kind === 'gp') {
+        const gps = CONFIG.groups;
+        if (d.op === 'add') {
+          const name = str(d.name) || ('第' + (gps.length + 1) + '组');
+          if (name.length > 10) return json(res, 400, { error: '组名太长了' });
+          if (gps.some(function (x) { return x.name === name; })) {
+            return json(res, 400, { error: '已经有「' + name + '」了' });
+          }
+          gps.push({ id: 'g_' + crypto.randomBytes(3).toString('hex'), name: name });
+        } else if (d.op === 'del') {
+          if (gps.length <= 1) return json(res, 400, { error: '至少保留一个小组' });
+          const id = str(d.id);
+          const idx = gps.findIndex(function (x) { return x.id === id; });
+          if (idx < 0) return json(res, 400, { error: '小组不存在' });
+          gps.splice(idx, 1);
+          // 同步清掉该组所有轮次里的打分
+          scores = scores.filter(function (s) { return s.g !== id; });
+          writeJSON(SCORES_FILE, scores);
+        } else {
+          return json(res, 400, { error: '操作错误' });
+        }
+        writeJSON(CONFIG_FILE, CONFIG);
+        return json(res, 200, { ok: true, groups: gps });
       }
 
       /* --- 轮次：各轮共用同一套小组与面试官，分数按轮分开统计 --- */

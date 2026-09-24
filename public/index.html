@@ -263,6 +263,7 @@ main{padding:4px 14px 100px}
   background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
 }
 .lv-text:focus{border-color:var(--brand);background:#fff}
+.dim-list{margin-top:10px}
 .btn-batch{
   width:100%;margin-top:10px;padding:13px;border-radius:13px;background:var(--ink);color:#fff;
   font-size:15px;font-weight:600;transition:.16s;
@@ -288,9 +289,6 @@ main{padding:4px 14px 100px}
     <div class="appbar-title" id="topTitle">面试打分</div>
     <div class="appbar-sub" id="topSub"></div>
   </div>
-  <button class="icon-btn" id="manageBtn" title="管理">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-  </button>
 </header>
 
 <main id="main"></main>
@@ -304,11 +302,14 @@ main{padding:4px 14px 100px}
     <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>
     排名
   </button>
+  <button id="navManage">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    管理
+  </button>
 </nav>
 
 <div class="mask" id="mask" hidden></div>
 <section class="sheet" id="sheet" hidden></section>
-<section class="sheet" id="msheet" hidden></section>
 <section class="sheet" id="asheet" hidden></section>
 <div class="toast" id="toast" hidden></div>
 
@@ -321,7 +322,7 @@ main{padding:4px 14px 100px}
   var LOCK = {};          // 当前轮次内面试者已被哪个组评分：candidateId -> 组id（该轮被别的组评过本组就不能再评）
   var CURGROUP = null;    // 当前进入的组
   var CURROUND = null;    // 当前轮次（打分/排名共用；轮次只区分分数归属，组与面试官配置不变）
-  var VIEW = 'score';     // score | rank
+  var VIEW = 'score';     // score | rank | manage
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
@@ -429,7 +430,9 @@ main{padding:4px 14px 100px}
   function render() {
     $('#navScore').className = VIEW === 'score' ? 'on' : '';
     $('#navRank').className = VIEW === 'rank' ? 'on' : '';
+    $('#navManage').className = VIEW === 'manage' ? 'on' : '';
     if (VIEW === 'rank') return renderRank();
+    if (VIEW === 'manage') return renderManage();
     if (!CURGROUP) return renderGroups();
     return renderGroup();
   }
@@ -505,7 +508,7 @@ main{padding:4px 14px 100px}
 
     if (!CFG.interviewers.length) {
       main.appendChild(el('div', 'card hint warn',
-        '还没有面试官，点右上角齿轮添加。'));
+        '还没有面试官，点底部「管理」添加。'));
       return;
     }
 
@@ -846,31 +849,20 @@ main{padding:4px 14px 100px}
     });
   }
 
-  /* ================= 管理（面试官 / 打分项 / 轮次，全局共用） ================= */
-  function openManage() {
-    paintManage();
-    showSheet('#msheet');
-  }
+  /* ================= 管理（面试官 / 打分项 / 轮次，全局共用）：底部导航第三个 tab，整页渲染 ================= */
+  function renderManage() {
+    var main = $('#main'); main.innerHTML = '';
+    $('#backBtn').hidden = true;
+    $('#topTitle').textContent = '管理';
+    $('#topSub').textContent = '面试官 · 打分项 · 小组 · 轮次，增删即时生效';
 
-  function paintManage() {
-    var sheet = $('#msheet');
-    sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">管理</div>' +
-      '<div class="sheet-sub">面试官 · 打分项 · 轮次，所有小组共用</div></div>' +
-      '<button class="sheet-close" id="mClose">关闭</button></div>' +
-      '<div class="m-sec"><div class="grade-label">面试官（点 × 移除）</div>' +
-        '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
-        '<div class="chip-wrap" id="mIvList"></div></div>' +
-      '<div class="m-sec"><div class="grade-label">打分项（点 × 删除，该项在所有打分里的分数一并移除）</div>' +
-        '<div class="add-row"><input id="dName" maxlength="10" placeholder="名称，如 项目经验"><button id="dAdd">添加</button></div>' +
-        '<textarea id="dLv" class="lv-text" placeholder="每行一个等级：等级名 分值（空格分隔）&#10;例如：&#10;偏弱 60&#10;良好 75&#10;优秀 90"></textarea>' +
-        '<div class="chip-wrap" id="dList"></div></div>' +
-      '<div class="m-sec"><div class="grade-label">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
-        '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮（留空自动编号）"><button id="mRdAdd">添加</button></div>' +
-        '<div class="chip-wrap" id="mRdList"></div></div>';
-
-    $('#mClose').onclick = hideSheets;
-
+    /* --- 面试官 --- */
+    var cIv = el('div', 'card');
+    cIv.innerHTML =
+      '<div class="card-title">面试官（点 × 移除）</div>' +
+      '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
+      '<div class="chip-wrap" id="mIvList"></div>';
+    main.appendChild(cIv);
     var box = $('#mIvList');
     if (!CFG.interviewers.length) {
       box.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有添加</span>';
@@ -879,13 +871,28 @@ main{padding:4px 14px 100px}
         var t = el('span', 'tag', esc(n) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
           if (!confirm('把「' + n + '」移除？\n他/她在所有组里的打分记录也会一并删除。')) return;
-          manage('iv', n, 'del').then(paintManage);
+          manage('iv', n, 'del');
         };
         box.appendChild(t);
       });
     }
+    var ivInp = $('#mIv');
+    function addIv() {
+      var v = ivInp.value.trim();
+      if (!v) return;
+      manage('iv', v, 'add').then(function () { ivInp.value = ''; ivInp.focus(); });
+    }
+    $('#mIvAdd').onclick = addIv;
+    ivInp.onkeydown = function (e) { if (e.key === 'Enter') addIv(); };
 
-    // 打分项：增删（至少保留一个）
+    /* --- 打分项 --- */
+    var cDim = el('div', 'card');
+    cDim.innerHTML =
+      '<div class="card-title">打分项（点 × 删除，该项在所有打分里的分数一并移除）</div>' +
+      '<div class="add-row"><input id="dName" maxlength="10" placeholder="名称，如 项目经验"><button id="dAdd">添加</button></div>' +
+      '<textarea id="dLv" class="lv-text" placeholder="每行一个等级：等级名 分值（空格分隔）&#10;例如：&#10;偏弱 60&#10;良好 75&#10;优秀 90"></textarea>' +
+      '<div class="chip-wrap dim-list" id="dList"></div>';
+    main.appendChild(cDim);
     var dbox = $('#dList');
     var dims = CFG.dimensions || [];
     if (!dims.length) {
@@ -897,7 +904,7 @@ main{padding:4px 14px 100px}
         var t = el('span', 'tag', esc(dm.name) + '（' + lvTxt + '）' + (canDel ? '<i>×</i>' : ''));
         if (canDel) t.querySelector('i').onclick = function () {
           if (!confirm('删除「' + dm.name + '」？\n它在所有打分记录里的分数会一并移除。')) return;
-          dimManage('del', { id: dm.id }).then(function () { paintManage(); });
+          dimManage('del', { id: dm.id });
         };
         dbox.appendChild(t);
       });
@@ -915,15 +922,48 @@ main{padding:4px 14px 100px}
       });
       if (bad) { toast('「' + bad + '」格式不对，应为：等级名 分值'); return; }
       if (!lv.length) { toast('请至少写一个等级：等级名 分值'); return; }
-      dimManage('add', { name: name, levels: lv }).then(function () {
-        $('#dName').value = ''; $('#dLv').value = '';
-        paintManage();
-      });
+      dimManage('add', { name: name, levels: lv });
     }
     $('#dAdd').onclick = addDim;
     $('#dName').onkeydown = function (e) { if (e.key === 'Enter') addDim(); };
 
-    // 轮次：增删（至少保留一轮）
+    /* --- 小组 --- */
+    var cGp = el('div', 'card');
+    cGp.innerHTML =
+      '<div class="card-title">面试小组（分场面试用；点 × 删除，该组所有轮次里的分数一并移除）</div>' +
+      '<div class="add-row"><input id="gpName" maxlength="10" placeholder="组名，如 第5组（留空自动编号）"><button id="gpAdd">添加</button></div>' +
+      '<div class="chip-wrap" id="gpList"></div>';
+    main.appendChild(cGp);
+    var gbox = $('#gpList');
+    var gps = CFG.groups || [];
+    if (!gps.length) {
+      gbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有小组</span>';
+    } else {
+      gps.forEach(function (gp) {
+        var canDel = gps.length > 1;
+        var t = el('span', 'tag', esc(gp.name) + (canDel ? '<i>×</i>' : ''));
+        if (canDel) t.querySelector('i').onclick = function () {
+          if (!confirm('删除「' + gp.name + '」？\n该组所有轮次里的打分记录会一并移除。')) return;
+          gpManage('del', { id: gp.id });
+        };
+        gbox.appendChild(t);
+      });
+    }
+    function addGp() {
+      var inp = $('#gpName');
+      var v = inp.value.trim();
+      gpManage('add', { name: v });
+    }
+    $('#gpAdd').onclick = addGp;
+    $('#gpName').onkeydown = function (e) { if (e.key === 'Enter') addGp(); };
+
+    /* --- 轮次 --- */
+    var cRd = el('div', 'card');
+    cRd.innerHTML =
+      '<div class="card-title">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
+      '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮（留空自动编号）"><button id="mRdAdd">添加</button></div>' +
+      '<div class="chip-wrap" id="mRdList"></div>';
+    main.appendChild(cRd);
     var rbox = $('#mRdList');
     var rdList = CFG.rounds || [];
     if (!rdList.length) {
@@ -934,28 +974,18 @@ main{padding:4px 14px 100px}
         var t = el('span', 'tag', esc(rd.name) + (canDel ? '<i>×</i>' : ''));
         if (canDel) t.querySelector('i').onclick = function () {
           if (!confirm('删除「' + rd.name + '」？\n该轮所有打分记录会一并删除。')) return;
-          rdManage('del', { id: rd.id }).then(function () { paintManage(); });
+          rdManage('del', { id: rd.id });
         };
         rbox.appendChild(t);
       });
     }
-
     function addRd() {
       var inp = $('#mRd');
       var v = inp.value.trim();
-      rdManage('add', { name: v }).then(function () { inp.value = ''; inp.focus(); paintManage(); });
+      rdManage('add', { name: v });
     }
     $('#mRdAdd').onclick = addRd;
     $('#mRd').onkeydown = function (e) { if (e.key === 'Enter') addRd(); };
-
-    var inp = $('#mIv');
-    function add() {
-      var v = inp.value.trim();
-      if (!v) return;
-      manage('iv', v, 'add').then(function () { inp.value = ''; inp.focus(); paintManage(); });
-    }
-    $('#mIvAdd').onclick = add;
-    inp.onkeydown = function (e) { if (e.key === 'Enter' ) add(); };
   }
 
   function manage(kind, name, op) {
@@ -970,6 +1000,26 @@ main{padding:4px 14px 100px}
           try { localStorage.removeItem(LS_KEY); } catch (e) {}
         }
       if (VIEW === 'rank') renderRank(); else render();
+    })
+      .catch(function (e) { toast(e.message); throw e; });
+  }
+
+  /* 小组管理（分场面试用；删组会清掉该组所有轮次的分数） */
+  function gpManage(op, payload) {
+    var body = { kind: 'gp', op: op };
+    Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
+    return post('/api/manage', body).then(function (j) {
+      CFG.groups = j.groups;
+      vib(18);
+      toast(op === 'add' ? '小组已添加' : '小组已删除');
+      if (op === 'del' && CURGROUP && !groupById(CURGROUP)) {
+        // 当前所在的组被删了，回首页
+        CURGROUP = null; MY = {}; MYG = null;
+      }
+      if (VIEW === 'rank') renderRank();
+      else if (VIEW === 'manage') renderManage();
+      else render();
+      return j;
     })
       .catch(function (e) { toast(e.message); throw e; });
   }
@@ -1016,7 +1066,7 @@ main{padding:4px 14px 100px}
     requestAnimationFrame(function () { s.classList.add('show'); });
   }
   function hideSheets(keepMask) {
-    ['#sheet', '#msheet', '#asheet'].forEach(function (sel) {
+    ['#sheet', '#asheet'].forEach(function (sel) {
       var s = $(sel);
       s.classList.remove('show');
       if (!s.hidden) setTimeout(function () { s.hidden = true; s.innerHTML = ''; }, 280);
@@ -1028,8 +1078,8 @@ main{padding:4px 14px 100px}
   /* ================= 交互 ================= */
   $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
   $('#navRank').onclick = function () { VIEW = 'rank'; hideSheets(); render(); };
+  $('#navManage').onclick = function () { VIEW = 'manage'; hideSheets(); render(); };
   $('#backBtn').onclick = function () { CURGROUP = null; hideSheets(); render(); };
-  $('#manageBtn').onclick = function () { openManage(); };
 
   boot();
 })();
