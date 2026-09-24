@@ -328,6 +328,56 @@ function unifiedRank(r) {
   return { rows: rankRows(rs, null) };
 }
 
+/* ---------- 总排名：跨所有轮次、所有小组，综合成一份总平均分排名（明细里标注每条分数来自哪一轮） ---------- */
+function overallRank() {
+  const rows = CONFIG.candidates.map(function (c) {
+    const mine = scores.filter(function (s) { return s.c === c.id; });
+    const detail = mine
+      .map(function (s) {
+        const dv = detailOf(s);
+        const rd = findRound(s.r);
+        return {
+          interviewer: s.i,
+          round: rd ? rd.name : '',
+          items: dv.items,
+          total: dv.total
+        };
+      })
+      .filter(function (d) { return d.items.length > 0; })
+      .sort(function (a, b) {
+        return a.interviewer.localeCompare(b.interviewer, 'zh') || a.round.localeCompare(b.round, 'zh');
+      });
+
+    const n = detail.length;
+    let sum = 0;
+    detail.forEach(function (d) { sum += d.total; });
+
+    return {
+      id: c.id,
+      name: c.name,
+      cls: c.cls,
+      count: n,
+      avg: n ? Math.round(sum / n * 100) / 100 : null,
+      detail: detail,
+      comment: c.comment || null
+    };
+  });
+
+  const done = rows.filter(function (r) { return r.count > 0; })
+    .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
+  const todo = rows.filter(function (r) { return r.count === 0; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
+
+  const out = done.concat(todo);
+  let last = null, lastRank = 0;
+  out.forEach(function (r, i) {
+    if (r.count === 0) { r.rank = null; return; }
+    if (last !== null && r.avg === last) { r.rank = lastRank; }
+    else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
+  });
+  return out;
+}
+
 /* ---------- HTTP ---------- */
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -489,8 +539,11 @@ const server = http.createServer(function (req, res) {
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 
-  /* ---- 排名（按轮次；rows 给新版页面，groups 兼容旧版页面；不带 r 默认第一轮） ---- */
+  /* ---- 排名（按轮次；rows 给新版页面，groups 兼容旧版页面；不带 r 默认第一轮；overall=1 跨所有轮次总排名） ---- */
   if (p === '/api/rank' && method === 'GET') {
+    if (u.searchParams.get('overall') === '1') {
+      return json(res, 200, { overall: true, rows: overallRank() });
+    }
     const rd = findRound(u.searchParams.get('r')) || CONFIG.rounds[0];
     return json(res, 200, {
       round: rd.id,
