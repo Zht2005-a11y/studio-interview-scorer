@@ -353,6 +353,7 @@ main{padding:4px 14px 100px}
   var VIEW = 'score';     // score | rank | manage
   var MANAGE_SEC = null;  // 管理页当前子页：null(入口) | iv | dim | gp | rd
   var DIM_DRAFT = [];     // 新增打分项的等级草稿（行内添加，未创建）
+  var RANK_ROUND = null;  // 排名页当前轮次：null = 全部轮次总排名；轮次id = 该轮排名
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
@@ -817,15 +818,21 @@ main{padding:4px 14px 100px}
     }).catch(function (e) { toast(e.message); throw e; });
   }
 
-  /* ================= 排名页（跨所有轮次、所有小组的一份总平均分排名） ================= */
+  /* ================= 排名页（默认当前轮次的统一排名，各轮分数隔离；可选看全部轮次总排名） ================= */
   function renderRank() {
+    if (RANK_ROUND && !roundById(RANK_ROUND)) RANK_ROUND = null;
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = '平均分排名';
-    $('#topSub').textContent = '综合所有轮次 · 全部小组统一排名';
     main.appendChild(el('div', 'card hint', '加载中…'));
 
-    api('/api/rank?overall=1').then(function (j) {
+    var overall = !RANK_ROUND;
+    var rd = overall ? null : roundById(RANK_ROUND);
+    $('#topSub').textContent = overall
+      ? '全部轮次 · 总平均分排名'
+      : rd.name + ' · 全部组统一排名（各轮分数隔离）';
+
+    api(overall ? '/api/rank?overall=1' : '/api/rank?r=' + encodeURIComponent(RANK_ROUND)).then(function (j) {
       RANK = j.rows || [];
       paintRank();
     }).catch(function (e) {
@@ -837,13 +844,29 @@ main{padding:4px 14px 100px}
   function paintRank() {
     var main = $('#main'); main.innerHTML = '';
 
+    // 轮次切换：各轮排名隔离，另可选「全部」看总排名
+    var rChips = el('div', 'card rank-round-card');
+    var cw = el('div', 'chip-wrap');
+    (CFG.rounds || []).forEach(function (x) {
+      var b = el('button', 'chip' + (RANK_ROUND === x.id ? ' on' : ''), esc(x.name));
+      b.onclick = function () { vib(); RANK_ROUND = x.id; renderRank(); };
+      cw.appendChild(b);
+    });
+    var allB = el('button', 'chip' + (RANK_ROUND === null ? ' on' : ''), '全部（总）');
+    allB.onclick = function () { vib(); RANK_ROUND = null; renderRank(); };
+    cw.appendChild(allB);
+    rChips.appendChild(el('div', 'card-title', '看哪一轮的排名（分数按轮隔离统计）'));
+    rChips.appendChild(cw);
+    main.appendChild(rChips);
+
     if (!RANK.length) {
       main.appendChild(el('div', 'card empty', '还没有面试者名单<br><span style="font-size:13px">到首页「面试者名单」里添加</span>'));
       return;
     }
     var any = false;
     RANK.forEach(function (r) { if (r.count > 0) any = true; });
-    if (!any) { main.appendChild(el('div', 'card empty', '还没有人打分')); return; }
+    var rdName = RANK_ROUND ? (roundById(RANK_ROUND) || {}).name : '';
+    if (!any) { main.appendChild(el('div', 'card empty', (rdName ? rdName : '全部轮次') + '还没有人打分')); return; }
 
     RANK.forEach(function (r) {
       if (r.count === 0) {
@@ -1304,7 +1327,7 @@ main{padding:4px 14px 100px}
 
   /* ================= 交互 ================= */
   $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
-  $('#navRank').onclick = function () { VIEW = 'rank'; hideSheets(); render(); };
+  $('#navRank').onclick = function () { VIEW = 'rank'; RANK_ROUND = CURROUND; hideSheets(); render(); };
   $('#navManage').onclick = function () { VIEW = 'manage'; hideSheets(); render(); };
   $('#backBtn').onclick = function () {
     hideSheets();
