@@ -258,6 +258,11 @@ main{padding:4px 14px 100px}
   background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
 }
 .batch-box textarea:focus{border-color:var(--brand);background:#fff}
+.lv-text{
+  width:100%;min-height:70px;margin-top:4px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
+  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
+}
+.lv-text:focus{border-color:var(--brand);background:#fff}
 .btn-batch{
   width:100%;margin-top:10px;padding:13px;border-radius:13px;background:var(--ink);color:#fff;
   font-size:15px;font-weight:600;transition:.16s;
@@ -283,7 +288,7 @@ main{padding:4px 14px 100px}
     <div class="appbar-title" id="topTitle">面试打分</div>
     <div class="appbar-sub" id="topSub"></div>
   </div>
-  <button class="icon-btn" id="manageBtn" title="管理面试官">
+  <button class="icon-btn" id="manageBtn" title="管理">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 </header>
@@ -348,7 +353,22 @@ main{padding:4px 14px 100px}
   function roundById(id) { if (!CFG.rounds) return null; for (var i = 0; i < CFG.rounds.length; i++) if (CFG.rounds[i].id === id) return CFG.rounds[i]; return null; }
   function firstRound() { return CFG.rounds && CFG.rounds.length ? CFG.rounds[0] : null; }
   function curRound() { return roundById(CURROUND) || firstRound(); }
-  function scoreOf(lv, k) { for (var i = 0; i < lv.length; i++) if (lv[i].key === k) return lv[i].score; return 0; }
+  function dimById(id) {
+    if (!CFG.dimensions) return null;
+    for (var i = 0; i < CFG.dimensions.length; i++) if (CFG.dimensions[i].id === id) return CFG.dimensions[i];
+    return null;
+  }
+  function dimScore(id, key) {
+    var dm = dimById(id);
+    if (!dm) return 0;
+    for (var i = 0; i < dm.levels.length; i++) if (dm.levels[i].key === key) return dm.levels[i].score;
+    return 0;
+  }
+  function dimTotal(dims) {
+    var t = 0;
+    Object.keys(dims).forEach(function (k) { t += dimScore(k, dims[k]); });
+    return t;
+  }
   function tsStr(ts) {
     var d = new Date(ts);
     function p(x) { return ('0' + x).slice(-2); }
@@ -387,7 +407,7 @@ main{padding:4px 14px 100px}
       api('/api/scored?r=' + encodeURIComponent(rr))
     ]).then(function (r) {
       MY = {};
-      (r[0].list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
+      (r[0].list || []).forEach(function (s) { MY[s.c] = s.dims || {}; });
       LOCK = r[1].of || {};
     });
   }
@@ -521,7 +541,7 @@ main{padding:4px 14px 100px}
     var usable = cands.filter(function (c) { return !lockedOf(c); });
     var total = usable.length;
     var done = 0;
-    usable.forEach(function (c) { if (MY[c.id]) done++; });
+    usable.forEach(function (c) { if (MY[c.id] && Object.keys(MY[c.id]).length) done++; });
 
     var hero = el('div', 'hero');
     hero.innerHTML =
@@ -544,7 +564,7 @@ main{padding:4px 14px 100px}
       var list = el('div', 'list');
       cands.forEach(function (c, i) {
         var s = MY[c.id];
-        var t = s ? scoreOf(CFG.expressLevels, s.e) + scoreOf(CFG.willingLevels, s.w) : null;
+        var t = (s && Object.keys(s).length) ? dimTotal(s) : null;
         var lk = lockedOf(c);
         var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
         var row = el('button', 'cand' + (lk ? ' lock' : (s ? ' done' : '')));
@@ -584,18 +604,21 @@ main{padding:4px 14px 100px}
   }
 
   function openSheet(c) {
-    var prev = MY[c.id] || { e: null, w: null };
-    var pend = { e: prev.e, w: prev.w };
+    var prev = MY[c.id] || {};
+    var pend = {};
+    CFG.dimensions.forEach(function (dm) { pend[dm.id] = prev[dm.id] || null; });
     var origCm = c.comment ? c.comment.text : '';
     var rd = curRound();
+
+    var blocks = '';
+    CFG.dimensions.forEach(function (dm) { blocks += gradeBlock(dm.name, dm.id, dm.levels, pend[dm.id]); });
 
     var sheet = $('#sheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
       '<div class="sheet-head"><div><div class="sheet-name">' + esc(c.name) + '</div>' +
       '<div class="sheet-sub">' + (rd ? esc(rd.name) + ' · ' : '') + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) + '</div></div>' +
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
-      gradeBlock('表达能力', 'e', CFG.expressLevels, pend.e) +
-      gradeBlock('是否常来工作室', 'w', CFG.willingLevels, pend.w) +
+      blocks +
       '<div class="grade-block"><div class="grade-label">评语</div>' +
         '<textarea id="cmBox" class="cm-box" maxlength="200" placeholder="写下对这位面试者的评语（可以打分时写，打分后再来改）">' +
         esc(origCm) + '</textarea>' +
@@ -607,11 +630,20 @@ main{padding:4px 14px 100px}
     showSheet('#sheet');
     var cmBox = $('#cmBox');
 
+    function gradeOk() {
+      return CFG.dimensions.length > 0 && CFG.dimensions.every(function (dm) { return !!pend[dm.id]; });
+    }
+    function gradeSum() {
+      var sum = 0;
+      CFG.dimensions.forEach(function (dm) { if (pend[dm.id]) sum += dimScore(dm.id, pend[dm.id]); });
+      return sum;
+    }
+
     function refresh() {
-      var gradeOk = !!(pend.e && pend.w);
+      var ok = gradeOk();
       var cmOk = cmBox.value.trim() !== origCm;   // 评语有改动才允许「只存评语」
-      $('#totalNum').textContent = gradeOk ? (scoreOf(CFG.expressLevels, pend.e) + scoreOf(CFG.willingLevels, pend.w) + ' 分') : '—';
-      $('#saveBtn').disabled = !(gradeOk || cmOk);
+      $('#totalNum').textContent = ok ? (gradeSum() + ' 分') : '—';
+      $('#saveBtn').disabled = !(ok || cmOk);
     }
 
     sheet.querySelectorAll('.grade').forEach(function (btn) {
@@ -629,10 +661,12 @@ main{padding:4px 14px 100px}
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
       var cmText = cmBox.value.trim();
-      var hasGrade = !!(pend.e && pend.w);
+      var hasGrade = gradeOk();
+      var dims = {};
+      CFG.dimensions.forEach(function (dm) { if (pend[dm.id]) dims[dm.id] = pend[dm.id]; });
       var jobs = [];
       if (cmText !== origCm) jobs.push(post('/api/comment', { c: c.id, text: cmText, by: ME.interviewer }));
-      if (hasGrade) jobs.push(post('/api/score', { r: rd ? rd.id : '', g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w }));
+      if (hasGrade) jobs.push(post('/api/score', { r: rd ? rd.id : '', g: CURGROUP, c: c.id, i: ME.interviewer, dims: dims }));
       Promise.all(jobs).then(function (res) {
         var ci = 0;
         if (cmText !== origCm) {
@@ -642,7 +676,7 @@ main{padding:4px 14px 100px}
           }
         }
         if (hasGrade) {
-          MY[c.id] = { e: pend.e, w: pend.w };
+          MY[c.id] = dims;
           LOCK[c.id] = CURGROUP;
         }
         vib(20); hideSheets(); render();
@@ -655,7 +689,7 @@ main{padding:4px 14px 100px}
             for (var k = 1; k <= cands.length; k++) {
               var nx = cands[(idx + k) % cands.length];
               if (LOCK[nx.id] && LOCK[nx.id] !== CURGROUP) continue;
-              if (!MY[nx.id]) { openSheet(nx); return; }
+              if (!MY[nx.id] || !Object.keys(MY[nx.id]).length) { openSheet(nx); return; }
             }
             toast('本组已全部打分完成');
           }, 300);
@@ -800,8 +834,10 @@ main{padding:4px 14px 100px}
         ? '<div class="rank-comment">评语：' + esc(r.comment.text) + '　<b>—— ' + esc(r.comment.by) + '</b></div>'
         : '';
       detail.innerHTML = cmHtml + r.detail.map(function (d) {
-        return '<div class="d-row"><span>' + esc(d.interviewer) + '　' + esc(d.expressLabel) + ' ' + d.expressScore +
-          ' + ' + esc(d.willingLabel) + ' ' + d.willingScore + '</span><b>' + d.total + '</b></div>';
+        var parts = (d.items || []).map(function (it) {
+          return esc(it.name) + ' ' + esc(it.label) + ' ' + it.score;
+        }).join(' + ');
+        return '<div class="d-row"><span>' + esc(d.interviewer) + (parts ? '　' + parts : '') + '</span><b>' + d.total + '</b></div>';
       }).join('');
       row.onclick = function () { detail.hidden = !detail.hidden; };
 
@@ -810,7 +846,7 @@ main{padding:4px 14px 100px}
     });
   }
 
-  /* ================= 管理面试官（全局一份名单，所有组共用） ================= */
+  /* ================= 管理（面试官 / 打分项 / 轮次，全局共用） ================= */
   function openManage() {
     paintManage();
     showSheet('#msheet');
@@ -819,12 +855,16 @@ main{padding:4px 14px 100px}
   function paintManage() {
     var sheet = $('#msheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">管理面试官</div>' +
-      '<div class="sheet-sub">全局一份名单 · 所有小组共用</div></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">管理</div>' +
+      '<div class="sheet-sub">面试官 · 打分项 · 轮次，所有小组共用</div></div>' +
       '<button class="sheet-close" id="mClose">关闭</button></div>' +
       '<div class="m-sec"><div class="grade-label">面试官（点 × 移除）</div>' +
         '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
         '<div class="chip-wrap" id="mIvList"></div></div>' +
+      '<div class="m-sec"><div class="grade-label">打分项（点 × 删除，该项在所有打分里的分数一并移除）</div>' +
+        '<div class="add-row"><input id="dName" maxlength="10" placeholder="名称，如 项目经验"><button id="dAdd">添加</button></div>' +
+        '<textarea id="dLv" class="lv-text" placeholder="每行一个等级：等级名 分值（空格分隔）&#10;例如：&#10;偏弱 60&#10;良好 75&#10;优秀 90"></textarea>' +
+        '<div class="chip-wrap" id="dList"></div></div>' +
       '<div class="m-sec"><div class="grade-label">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
         '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮（留空自动编号）"><button id="mRdAdd">添加</button></div>' +
         '<div class="chip-wrap" id="mRdList"></div></div>';
@@ -844,6 +884,44 @@ main{padding:4px 14px 100px}
         box.appendChild(t);
       });
     }
+
+    // 打分项：增删（至少保留一个）
+    var dbox = $('#dList');
+    var dims = CFG.dimensions || [];
+    if (!dims.length) {
+      dbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有打分项</span>';
+    } else {
+      dims.forEach(function (dm) {
+        var canDel = dims.length > 1;
+        var lvTxt = dm.levels.map(function (lv) { return esc(lv.label) + lv.score; }).join(' / ');
+        var t = el('span', 'tag', esc(dm.name) + '（' + lvTxt + '）' + (canDel ? '<i>×</i>' : ''));
+        if (canDel) t.querySelector('i').onclick = function () {
+          if (!confirm('删除「' + dm.name + '」？\n它在所有打分记录里的分数会一并移除。')) return;
+          dimManage('del', { id: dm.id }).then(function () { paintManage(); });
+        };
+        dbox.appendChild(t);
+      });
+    }
+    function addDim() {
+      var name = $('#dName').value.trim();
+      var lv = [];
+      var bad = null;
+      $('#dLv').value.split(/\n+/).forEach(function (line) {
+        var t = line.trim().split(/\s+/);
+        if (!t[0]) return;
+        var sc = Number(t[1]);
+        if (t.length < 2 || !isFinite(sc) || sc < 0 || sc > 999) { bad = line.trim(); return; }
+        lv.push({ label: t[0], score: sc });
+      });
+      if (bad) { toast('「' + bad + '」格式不对，应为：等级名 分值'); return; }
+      if (!lv.length) { toast('请至少写一个等级：等级名 分值'); return; }
+      dimManage('add', { name: name, levels: lv }).then(function () {
+        $('#dName').value = ''; $('#dLv').value = '';
+        paintManage();
+      });
+    }
+    $('#dAdd').onclick = addDim;
+    $('#dName').onkeydown = function (e) { if (e.key === 'Enter') addDim(); };
 
     // 轮次：增删（至少保留一轮）
     var rbox = $('#mRdList');
@@ -908,6 +986,21 @@ main{padding:4px 14px 100px}
         CURROUND = firstRound() ? firstRound().id : null;
         MY = {}; MYG = null;
       }
+      if (VIEW === 'rank') renderRank(); else render();
+      return j;
+    })
+      .catch(function (e) { toast(e.message); throw e; });
+  }
+
+  /* 打分项管理（动态维度：每项若干等级，打分记录按项存等级） */
+  function dimManage(op, payload) {
+    var body = { kind: 'dim', op: op };
+    Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
+    return post('/api/manage', body).then(function (j) {
+      CFG.dimensions = j.dimensions;
+      vib(18);
+      toast(op === 'add' ? '打分项已添加' : '打分项已删除');
+      MY = {}; MYG = null;   // 重新拉自己的分，清掉已删项的残留 key
       if (VIEW === 'rank') renderRank(); else render();
       return j;
     })
