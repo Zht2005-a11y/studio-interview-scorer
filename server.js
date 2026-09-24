@@ -34,8 +34,11 @@ const SEED = {
   interviewers: ['张洪涛', '张加美', '田丹', '冉娟', '申宇轩', '黄红强', '付博',
                  '陈英开', '陈明峰', '骆丹', '马运福', '刘院明', '谌艳'],
 
-  // 所有组共用的面试者名单：[{ id, name, cls }]，在首页「面试者名单」里维护
-  candidates: [],
+  // 轮次：多轮面试共用同一套小组与面试官配置，分数按轮分开统计
+  rounds: [
+    { id: 'r1', name: '第1轮' },
+    { id: 'r2', name: '第2轮' }
+  ],
 
   groups: [
     { id: 'g1', name: '第1组' },
@@ -112,6 +115,15 @@ function normalize(cfg) {
   (Array.isArray(cfg.candidates) ? cfg.candidates : []).forEach(takeCd);
   cfg.interviewers = iv;
   cfg.candidates = cd;
+
+  // 轮次：旧数据没有 rounds 时补上第一轮/第二轮，之后可在 App 里增删
+  if (!Array.isArray(cfg.rounds) || !cfg.rounds.length) {
+    cfg.rounds = [{ id: 'r1', name: '第1轮' }, { id: 'r2', name: '第2轮' }];
+  } else {
+    cfg.rounds = cfg.rounds.map(function (r) {
+      return { id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'), name: str(r && r.name) || '轮次' };
+    });
+  }
   return cfg;
 }
 
@@ -125,7 +137,7 @@ if (!CONFIG || !Array.isArray(CONFIG.groups)) {
   if (JSON.stringify(CONFIG) !== before) writeJSON(CONFIG_FILE, CONFIG);
 }
 
-/* ---------- 打分数据：{ g:组, c:面试者id, i:面试官, e:表达等级, w:意愿等级 } ---------- */
+/* ---------- 打分数据：{ r:轮次, g:组, c:面试者id, i:面试官, e:表达等级, w:意愿等级 } ---------- */
 let scores = readJSON(SCORES_FILE, []);
 if (!Array.isArray(scores)) scores = [];
 
@@ -140,17 +152,29 @@ if (!Array.isArray(scores)) scores = [];
   if (changed) writeJSON(SCORES_FILE, scores);
 })();
 
+/* 兼容没有轮次字段的旧打分数据：全部归到第一轮（历史分数都是一轮面试产生的） */
+(function migrateRounds() {
+  const def = CONFIG.rounds.length ? CONFIG.rounds[0].id : 'r1';
+  let changed = false;
+  scores.forEach(function (s) { if (!s.r) { s.r = def; changed = true; } });
+  if (changed) writeJSON(SCORES_FILE, scores);
+})();
+
 function findGroup(id) {
   return CONFIG.groups.find(function (g) { return g.id === id; }) || null;
+}
+function findRound(id) {
+  return CONFIG.rounds.find(function (r) { return r.id === id; }) || null;
 }
 function levelOf(levels, key) {
   return (levels || []).find(function (l) { return l.key === key; }) || null;
 }
 
 /* ---------- 排名（旧版按组格式，仅用于兼容还没刷新缓存的旧页面） ---------- */
-function rankOf(group) {
+function rankOf(group, r) {
+  const rs = scores.filter(function (s) { return s.r === r; });
   const rows = CONFIG.candidates.map(function (c) {
-    const detail = scores
+    const detail = rs
       .filter(function (s) { return s.g === group.id && s.c === c.id; })
       .map(function (s) {
         const e = levelOf(CONFIG.expressLevels, s.e);
@@ -197,10 +221,11 @@ function rankOf(group) {
   return { groupId: group.id, groupName: group.name, rows: out };
 }
 
-/* ---------- 排名：小组只是分场面试，所有组的打分合并成一份统一排名 ---------- */
-function unifiedRank() {
+/* ---------- 排名：小组只是分场面试，一轮内所有组的打分合并成一份统一排名 ---------- */
+function unifiedRank(r) {
+  const rs = scores.filter(function (s) { return s.r === r; });
   const rows = CONFIG.candidates.map(function (c) {
-    const mine = scores.filter(function (s) { return s.c === c.id; });
+    const mine = rs.filter(function (s) { return s.c === c.id; });
     const detail = mine
       .map(function (s) {
         const e = levelOf(CONFIG.expressLevels, s.e);
@@ -303,34 +328,40 @@ const server = http.createServer(function (req, res) {
       willingLevels: CONFIG.willingLevels,
       interviewers: CONFIG.interviewers,
       candidates: CONFIG.candidates,
-      groups: CONFIG.groups
+      groups: CONFIG.groups,
+      rounds: CONFIG.rounds
     });
   }
 
-  /* ---- 某位面试官已打的分 ---- */
+  /* ---- 某位面试官在某轮已打的分 ---- */
   if (p === '/api/mine' && method === 'GET') {
     const g = u.searchParams.get('g') || '';
     const i = u.searchParams.get('i') || '';
+    const rd = findRound(u.searchParams.get('r')) || CONFIG.rounds[0];
     return json(res, 200, {
       list: scores
-        .filter(function (s) { return s.g === g && s.i === i; })
+        .filter(function (s) { return s.r === rd.id && s.g === g && s.i === i; })
         .map(function (s) { return { c: s.c, e: s.e, w: s.w }; })
     });
   }
 
-  /* ---- 每位面试者已被哪个组评分（跨组锁定状态） ---- */
+  /* ---- 某轮里每位面试者已被哪个组评分（跨组锁定状态） ---- */
   if (p === '/api/scored' && method === 'GET') {
+    const rd = findRound(u.searchParams.get('r')) || CONFIG.rounds[0];
     const of = {};
-    scores.forEach(function (s) { if (!of[s.c]) of[s.c] = s.g; });
+    scores.filter(function (s) { return s.r === rd.id; }).forEach(function (s) {
+      if (!of[s.c]) of[s.c] = s.g;
+    });
     return json(res, 200, { of: of });
   }
 
-  /* ---- 提交打分（同一人重复提交自动覆盖） ---- */
+  /* ---- 提交打分（同一轮次内重复提交自动覆盖；不同轮次分数互相独立） ---- */
   if (p === '/api/score' && method === 'POST') {
     return readBody(req).then(function (raw) {
       let d;
       try { d = JSON.parse(raw || '{}'); } catch (e) { return json(res, 400, { error: '数据格式错误' }); }
 
+      const rd = findRound(d.r) || CONFIG.rounds[0];
       const g = findGroup(d.g);
       if (!g) return json(res, 400, { error: '组不存在' });
       if (!CONFIG.interviewers.length) return json(res, 400, { error: '还没有面试官，先到右上角添加' });
@@ -341,16 +372,17 @@ const server = http.createServer(function (req, res) {
       if (!levelOf(CONFIG.expressLevels, d.e)) return json(res, 400, { error: '表达能力等级无效' });
       if (!levelOf(CONFIG.willingLevels, d.w)) return json(res, 400, { error: '意愿等级无效' });
 
-      /* 一位面试者只由一个组评分：已被其他组评过、本组还没评过的，拒绝 */
-      const other = scores.find(function (s) { return s.c === d.c && s.g !== d.g; });
-      if (other && !scores.some(function (s) { return s.c === d.c && s.g === d.g; })) {
+      /* 同一轮内一位面试者只由一个组评分：该轮里已被其他组评过、本组还没评过的，拒绝 */
+      const inRound = scores.filter(function (s) { return s.r === rd.id; });
+      const other = inRound.find(function (s) { return s.c === d.c && s.g !== d.g; });
+      if (other && !inRound.some(function (s) { return s.c === d.c && s.g === d.g; })) {
         const og = findGroup(other.g);
         return json(res, 400, { error: '该面试者已由「' + (og ? og.name : '其他组') + '」评分，其他组不能再评' });
       }
 
-      const old = scores.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
+      const old = inRound.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
       if (old) { old.e = d.e; old.w = d.w; }
-      else scores.push({ g: d.g, c: d.c, i: d.i, e: d.e, w: d.w });
+      else scores.push({ r: rd.id, g: d.g, c: d.c, i: d.i, e: d.e, w: d.w });
       writeJSON(SCORES_FILE, scores);
       return json(res, 200, { ok: true });
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
@@ -376,16 +408,25 @@ const server = http.createServer(function (req, res) {
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 
-  /* ---- 排名（rows 给新版页面；groups 兼容还没刷新缓存的旧版页面） ---- */
+  /* ---- 排名（按轮次；rows 给新版页面，groups 兼容旧版页面；不带 r 默认第一轮） ---- */
   if (p === '/api/rank' && method === 'GET') {
-    return json(res, 200, { rows: unifiedRank().rows, groups: CONFIG.groups.map(rankOf) });
+    const rd = findRound(u.searchParams.get('r')) || CONFIG.rounds[0];
+    return json(res, 200, {
+      round: rd.id,
+      roundName: rd.name,
+      rows: unifiedRank(rd.id).rows,
+      groups: CONFIG.groups.map(function (g) { return rankOf(g, rd.id); })
+    });
   }
 
   /* ---- 管理名单 ----
      面试官（全局一份，各组共用）：{ kind:'iv', op:'add'|'del', name }
      面试者（全局共用）：{ kind:'cd', op:'add', name, cls }
                         { kind:'cd', op:'del', id }
-                        { kind:'cd', op:'batch', items:[{name,cls}, ...] }   */
+                        { kind:'cd', op:'batch', items:[{name,cls}, ...] }
+     轮次（各轮共用同一套小组与面试官，分数按轮分开）：
+                        { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」
+                        { kind:'rd', op:'del', id }      删除该轮全部打分 */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
       let d;
@@ -459,6 +500,32 @@ const server = http.createServer(function (req, res) {
         }
 
         return json(res, 400, { error: '操作错误' });
+      }
+
+      /* --- 轮次：各轮共用同一套小组与面试官，分数按轮分开统计 --- */
+      if (d.kind === 'rd') {
+        const rounds = CONFIG.rounds;
+        if (d.op === 'add') {
+          const name = str(d.name) || ('第' + (rounds.length + 1) + '轮');
+          if (name.length > 10) return json(res, 400, { error: '轮次名太长了' });
+          if (rounds.some(function (x) { return x.name === name; })) {
+            return json(res, 400, { error: '已经有「' + name + '」了' });
+          }
+          rounds.push({ id: 'r_' + crypto.randomBytes(3).toString('hex'), name: name });
+        } else if (d.op === 'del') {
+          if (rounds.length <= 1) return json(res, 400, { error: '至少保留一个轮次' });
+          const id = str(d.id);
+          const idx = rounds.findIndex(function (x) { return x.id === id; });
+          if (idx < 0) return json(res, 400, { error: '轮次不存在' });
+          rounds.splice(idx, 1);
+          // 同步清掉该轮所有打分
+          scores = scores.filter(function (s) { return s.r !== id; });
+          writeJSON(SCORES_FILE, scores);
+        } else {
+          return json(res, 400, { error: '操作错误' });
+        }
+        writeJSON(CONFIG_FILE, CONFIG);
+        return json(res, 200, { ok: true, rounds: rounds });
       }
 
       return json(res, 400, { error: '类型错误' });

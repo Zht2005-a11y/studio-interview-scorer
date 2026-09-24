@@ -311,10 +311,11 @@ main{padding:4px 14px 100px}
 (function () {
   var CFG = null;
   var ME = null;          // { interviewer }（全局面试官名单里的名字，任何组通用）
-  var MY = {};            // 我已打的分：candidateName -> { e, w }
-  var MYG = null;         // MY 是哪个组里拉的（换组要重新拉）
-  var LOCK = {};          // 面试者已被哪个组评分：candidateId -> 组id（被别的组评过本组就不能再评）
+  var MY = {};            // 我已打的分（当前轮次内）：candidateId -> { e, w }
+  var MYG = null;         // MY 是哪个「组+轮次」组合拉的（换组/换轮次要重新拉）
+  var LOCK = {};          // 当前轮次内面试者已被哪个组评分：candidateId -> 组id（该轮被别的组评过本组就不能再评）
   var CURGROUP = null;    // 当前进入的组
+  var CURROUND = null;    // 当前轮次（打分/排名共用；轮次只区分分数归属，组与面试官配置不变）
   var VIEW = 'score';     // score | rank
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
@@ -344,6 +345,9 @@ main{padding:4px 14px 100px}
     return api(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }
   function groupById(id) { for (var i = 0; i < CFG.groups.length; i++) if (CFG.groups[i].id === id) return CFG.groups[i]; return null; }
+  function roundById(id) { if (!CFG.rounds) return null; for (var i = 0; i < CFG.rounds.length; i++) if (CFG.rounds[i].id === id) return CFG.rounds[i]; return null; }
+  function firstRound() { return CFG.rounds && CFG.rounds.length ? CFG.rounds[0] : null; }
+  function curRound() { return roundById(CURROUND) || firstRound(); }
   function scoreOf(lv, k) { for (var i = 0; i < lv.length; i++) if (lv[i].key === k) return lv[i].score; return 0; }
   function tsStr(ts) {
     var d = new Date(ts);
@@ -357,6 +361,7 @@ main{padding:4px 14px 100px}
   function boot() {
     api('/api/config').then(function (cfg) {
       CFG = cfg;
+      CURROUND = firstRound() ? firstRound().id : null;
       var saved = null;
       try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) {}
       var q = new URLSearchParams(location.search);
@@ -375,15 +380,30 @@ main{padding:4px 14px 100px}
   }
 
   function loadMine() {
-    if (!ME) { MY = {}; return Promise.resolve(); }
+    if (!ME || !CURGROUP) { MY = {}; LOCK = {}; return Promise.resolve(); }
+    var rr = curRound() ? curRound().id : '';
     return Promise.all([
-      api('/api/mine?g=' + encodeURIComponent(CURGROUP) + '&i=' + encodeURIComponent(ME.interviewer)),
-      api('/api/scored')
+      api('/api/mine?g=' + encodeURIComponent(CURGROUP) + '&i=' + encodeURIComponent(ME.interviewer) + '&r=' + encodeURIComponent(rr)),
+      api('/api/scored?r=' + encodeURIComponent(rr))
     ]).then(function (r) {
       MY = {};
       (r[0].list || []).forEach(function (s) { MY[s.c] = { e: s.e, w: s.w }; });
       LOCK = r[1].of || {};
     });
+  }
+
+  /* 切换轮次：组、面试官名单、面试者名单都不变，只切换分数归属的轮次 */
+  function switchRound(id) {
+    if (!id || id === CURROUND || !roundById(id)) return;
+    vib();
+    CURROUND = id;
+    MY = {}; MYG = null;
+    if (VIEW === 'rank') { renderRank(); return; }
+    if (CURGROUP) {
+      var g = groupById(CURGROUP);
+      if (g) { loadMine().then(function () { renderCandidates(g); }, function () { renderCandidates(g); }); }
+      else render();
+    } else render();
   }
 
   function render() {
@@ -416,12 +436,28 @@ main{padding:4px 14px 100px}
       card.innerHTML =
         '<span class="gbadge">' + (i + 1) + '</span>' +
         '<span class="gmain"><span class="gname">' + esc(g.name) + '</span>' +
-        '<span class="gmeta">进入打分 · 面试官 ' + CFG.interviewers.length + ' 人共用</span></span>' +
+        '<span class="gmeta">进入打分 · 面试官 ' + CFG.interviewers.length + ' 人共用 · ' + ((CFG.rounds || []).length || 1) + ' 轮</span></span>' +
         '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
       card.onclick = function () { vib(); CURGROUP = g.id; render(); };
       list.appendChild(card);
     });
     main.appendChild(list);
+
+    // 页面底部：轮次切换（各轮共用同一套小组与面试官，分数按轮隔离统计）
+    var rdList = CFG.rounds || [];
+    if (rdList.length > 1) {
+      var rc = el('div', 'card');
+      rc.appendChild(el('div', 'card-title', '轮次切换'));
+      var rw = el('div', 'chip-wrap');
+      rdList.forEach(function (x) {
+        var b = el('button', 'chip' + (CURROUND === x.id ? ' on' : ''), esc(x.name));
+        b.onclick = function () { switchRound(x.id); };
+        rw.appendChild(b);
+      });
+      rc.appendChild(rw);
+      rc.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">各轮共用同一套小组与面试官，分数按轮单独统计、互不影响</span>'));
+      main.appendChild(rc);
+    }
   }
 
   /* ================= 组内 ================= */
@@ -433,9 +469,9 @@ main{padding:4px 14px 100px}
     $('#topTitle').textContent = g.name;
 
     if (!meOK()) return renderPickIdentity(g);
-    if (MYG !== g.id) {
-      // 换到另一个组，重新拉这个组里我打的分
-      MYG = g.id;
+    if (MYG !== g.id + '|' + CURROUND) {
+      // 换到另一个组/另一轮，重新拉当前「组+轮次」里我打的分
+      MYG = g.id + '|' + CURROUND;
       return loadMine().then(function () { renderCandidates(g); },
                               function () { renderCandidates(g); });
     }
@@ -462,7 +498,7 @@ main{padding:4px 14px 100px}
         vib();
         ME = { interviewer: n };
         saveME();
-        MYG = g.id;
+        MYG = g.id + '|' + CURROUND;
         loadMine().then(render, function (e) { toast(e.message); render(); });
       };
       wrap.appendChild(b);
@@ -472,9 +508,10 @@ main{padding:4px 14px 100px}
     main.appendChild(card);
   }
 
-  /* --- 面试者列表（所有组共用一份名单；已被其他组评分的锁定） --- */
+  /* --- 面试者列表（所有组共用一份名单；当前轮次内已被其他组评分的锁定） --- */
   function renderCandidates(g) {
-    $('#topSub').textContent = g.name + ' · 面试官 ' + ME.interviewer;
+    var rd = curRound();
+    $('#topSub').textContent = g.name + ' · ' + (rd ? rd.name : '') + ' · 面试官 ' + ME.interviewer;
     var main = $('#main'); main.innerHTML = '';
 
     var lockedOf = function (c) {
@@ -550,11 +587,12 @@ main{padding:4px 14px 100px}
     var prev = MY[c.id] || { e: null, w: null };
     var pend = { e: prev.e, w: prev.w };
     var origCm = c.comment ? c.comment.text : '';
+    var rd = curRound();
 
     var sheet = $('#sheet');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
       '<div class="sheet-head"><div><div class="sheet-name">' + esc(c.name) + '</div>' +
-      '<div class="sheet-sub">' + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) + '</div></div>' +
+      '<div class="sheet-sub">' + (rd ? esc(rd.name) + ' · ' : '') + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) + '</div></div>' +
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
       gradeBlock('表达能力', 'e', CFG.expressLevels, pend.e) +
       gradeBlock('是否常来工作室', 'w', CFG.willingLevels, pend.w) +
@@ -594,7 +632,7 @@ main{padding:4px 14px 100px}
       var hasGrade = !!(pend.e && pend.w);
       var jobs = [];
       if (cmText !== origCm) jobs.push(post('/api/comment', { c: c.id, text: cmText, by: ME.interviewer }));
-      if (hasGrade) jobs.push(post('/api/score', { g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w }));
+      if (hasGrade) jobs.push(post('/api/score', { r: rd ? rd.id : '', g: CURGROUP, c: c.id, i: ME.interviewer, e: pend.e, w: pend.w }));
       Promise.all(jobs).then(function (res) {
         var ci = 0;
         if (cmText !== origCm) {
@@ -708,15 +746,16 @@ main{padding:4px 14px 100px}
     }).catch(function (e) { toast(e.message); throw e; });
   }
 
-  /* ================= 排名页（所有组合并的统一排名） ================= */
+  /* ================= 排名页（一轮内所有组分数合并的统一排名；轮次在打分页切换） ================= */
   function renderRank() {
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = '平均分排名';
-    $('#topSub').textContent = '小组只是分场面试 · 全部组统一排名';
+    var rd = curRound();
+    $('#topSub').textContent = (rd ? rd.name + ' · ' : '') + '全部组统一排名（轮次在打分页切换）';
     main.appendChild(el('div', 'card hint', '加载中…'));
 
-    api('/api/rank').then(function (j) {
+    api('/api/rank?r=' + encodeURIComponent(rd ? rd.id : '')).then(function (j) {
       RANK = j.rows || [];
       paintRank();
     }).catch(function (e) {
@@ -732,9 +771,10 @@ main{padding:4px 14px 100px}
       main.appendChild(el('div', 'card empty', '还没有面试者名单<br><span style="font-size:13px">到首页「面试者名单」里添加</span>'));
       return;
     }
+    var rd = curRound();
     var any = false;
     RANK.forEach(function (r) { if (r.count > 0) any = true; });
-    if (!any) { main.appendChild(el('div', 'card empty', '还没有人打分')); return; }
+    if (!any) { main.appendChild(el('div', 'card empty', (rd ? rd.name : '') + '还没有人打分')); return; }
 
     RANK.forEach(function (r) {
       if (r.count === 0) {
@@ -784,7 +824,10 @@ main{padding:4px 14px 100px}
       '<button class="sheet-close" id="mClose">关闭</button></div>' +
       '<div class="m-sec"><div class="grade-label">面试官（点 × 移除）</div>' +
         '<div class="add-row"><input id="mIv" maxlength="20" placeholder="输入面试官姓名"><button id="mIvAdd">添加</button></div>' +
-        '<div class="chip-wrap" id="mIvList"></div></div>';
+        '<div class="chip-wrap" id="mIvList"></div></div>' +
+      '<div class="m-sec"><div class="grade-label">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
+        '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮（留空自动编号）"><button id="mRdAdd">添加</button></div>' +
+        '<div class="chip-wrap" id="mRdList"></div></div>';
 
     $('#mClose').onclick = hideSheets;
 
@@ -801,6 +844,31 @@ main{padding:4px 14px 100px}
         box.appendChild(t);
       });
     }
+
+    // 轮次：增删（至少保留一轮）
+    var rbox = $('#mRdList');
+    var rdList = CFG.rounds || [];
+    if (!rdList.length) {
+      rbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有轮次</span>';
+    } else {
+      rdList.forEach(function (rd) {
+        var canDel = rdList.length > 1;
+        var t = el('span', 'tag', esc(rd.name) + (canDel ? '<i>×</i>' : ''));
+        if (canDel) t.querySelector('i').onclick = function () {
+          if (!confirm('删除「' + rd.name + '」？\n该轮所有打分记录会一并删除。')) return;
+          rdManage('del', { id: rd.id }).then(function () { paintManage(); });
+        };
+        rbox.appendChild(t);
+      });
+    }
+
+    function addRd() {
+      var inp = $('#mRd');
+      var v = inp.value.trim();
+      rdManage('add', { name: v }).then(function () { inp.value = ''; inp.focus(); paintManage(); });
+    }
+    $('#mRdAdd').onclick = addRd;
+    $('#mRd').onkeydown = function (e) { if (e.key === 'Enter') addRd(); };
 
     var inp = $('#mIv');
     function add() {
@@ -823,8 +891,26 @@ main{padding:4px 14px 100px}
           ME = null; MY = {}; MYG = null;
           try { localStorage.removeItem(LS_KEY); } catch (e) {}
         }
-        if (VIEW === 'rank') renderRank(); else render();
-      })
+      if (VIEW === 'rank') renderRank(); else render();
+    })
+      .catch(function (e) { toast(e.message); throw e; });
+  }
+
+  /* 轮次管理（各轮共用同一套小组与面试官，分数按轮分开） */
+  function rdManage(op, payload) {
+    var body = { kind: 'rd', op: op };
+    Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
+    return post('/api/manage', body).then(function (j) {
+      CFG.rounds = j.rounds;
+      vib(18);
+      toast(op === 'add' ? '轮次已添加' : '轮次已删除');
+      if (!roundById(CURROUND)) {   // 当前轮次被删了，切到第一轮
+        CURROUND = firstRound() ? firstRound().id : null;
+        MY = {}; MYG = null;
+      }
+      if (VIEW === 'rank') renderRank(); else render();
+      return j;
+    })
       .catch(function (e) { toast(e.message); throw e; });
   }
 
