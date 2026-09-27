@@ -4,8 +4,11 @@
  * 工作室面试打分系统
  * 启动：node server.js        换端口：PORT=8080 node server.js
  *
- * 面试官（全局一份名单，所有小组共用）：在 App 右上角「管理面试官」里增删。
+ * 面试官（全局一份名单，所有小组共用）：在 App 右上角「管理」里增删。
  * 小组只是分场面试（提高同时面试的效率），不做任何名单隔离。
+ * 轮次（多轮面试）：各轮共用同一套小组与面试官，分数按轮隔离统计。
+ * 打分项（动态，如 表达能力 / 是否常来工作室）：右上角「管理」里可增删，
+ *   每个打分项有若干等级（名称 + 分值），打分记录里按打分项存等级。
  * 面试者（班级 + 姓名，所有组共用）：在 App 首页「面试者名单」里添加、批量导入、删除。
  */
 
@@ -13,18 +16,26 @@
 const SEED = {
   title: '工作室面试打分系统',
 
-  // 表达能力：偏弱 60 / 良好 75 / 优秀 90
-  expressLevels: [
-    { key: 'weak',      label: '偏弱', score: 60 },
-    { key: 'good',      label: '良好', score: 75 },
-    { key: 'excellent', label: '优秀', score: 90 }
-  ],
-
-  // 是否常来工作室：意愿弱 65 / 意愿一般 80 / 意愿强 90
-  willingLevels: [
-    { key: 'low',  label: '意愿弱',   score: 65 },
-    { key: 'mid',  label: '意愿一般', score: 80 },
-    { key: 'high', label: '意愿强',   score: 90 }
+  // 打分项：每个打分项含若干等级 { key, label, score }，可在 App 里增删打分项
+  dimensions: [
+    // 表达能力：偏弱 60 / 良好 75 / 优秀 90
+    {
+      id: 'e', name: '表达能力',
+      levels: [
+        { key: 'weak',      label: '偏弱', score: 60 },
+        { key: 'good',      label: '良好', score: 75 },
+        { key: 'excellent', label: '优秀', score: 90 }
+      ]
+    },
+    // 是否常来工作室：意愿弱 65 / 意愿一般 80 / 意愿强 90
+    {
+      id: 'w', name: '是否常来工作室',
+      levels: [
+        { key: 'low',  label: '意愿弱',   score: 65 },
+        { key: 'mid',  label: '意愿一般', score: 80 },
+        { key: 'high', label: '意愿强',   score: 90 }
+      ]
+    }
   ],
 
   // 所有组共用的面试者名单：[{ id, name, cls }]，在首页「面试者名单」里维护
@@ -124,6 +135,38 @@ function normalize(cfg) {
       return { id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'), name: str(r && r.name) || '轮次' };
     });
   }
+
+  // 打分项：旧版固定两个（expressLevels / willingLevels），统一成动态 dimensions
+  const normLv = function (lv, i) {
+    return {
+      key: str(lv && lv.key) || 'lv' + i,
+      label: str(lv && lv.label) || ('等级' + (i + 1)),
+      score: Number(lv && lv.score) || 0
+    };
+  };
+  if (Array.isArray(cfg.dimensions) && cfg.dimensions.length) {
+    cfg.dimensions = cfg.dimensions.map(function (dm, di) {
+      return {
+        id: str(dm && dm.id) || 'd_' + crypto.randomBytes(3).toString('hex'),
+        name: str(dm && dm.name) || ('打分项' + (di + 1)),
+        levels: (Array.isArray(dm && dm.levels) ? dm.levels : []).map(normLv)
+      };
+    });
+  } else {
+    const eLv = Array.isArray(cfg.expressLevels) && cfg.expressLevels.length
+      ? cfg.expressLevels
+      : (SEED.dimensions.find(function (d) { return d.id === 'e'; }) || {}).levels;
+    const wLv = Array.isArray(cfg.willingLevels) && cfg.willingLevels.length
+      ? cfg.willingLevels
+      : (SEED.dimensions.find(function (d) { return d.id === 'w'; }) || {}).levels;
+    cfg.dimensions = [
+      { id: 'e', name: '表达能力', levels: eLv.map(normLv) },
+      { id: 'w', name: '是否常来工作室', levels: wLv.map(normLv) }
+    ];
+  }
+  // dimensions 是唯一事实来源，旧字段不再保留
+  delete cfg.expressLevels;
+  delete cfg.willingLevels;
   return cfg;
 }
 
@@ -160,85 +203,73 @@ if (!Array.isArray(scores)) scores = [];
   if (changed) writeJSON(SCORES_FILE, scores);
 })();
 
+/* 兼容旧打分数据：固定字段 e/w 并入通用 dims；已删除的打分项从记录里清掉 */
+(function migrateDims() {
+  const validIds = {};
+  CONFIG.dimensions.forEach(function (d) { validIds[d.id] = 1; });
+  let changed = false;
+  scores.forEach(function (s) {
+    if (!s.dims || typeof s.dims !== 'object') { s.dims = {}; changed = true; }
+    if (s.e || s.w) {
+      if (validIds.e && s.e) s.dims.e = s.e;
+      if (validIds.w && s.w) s.dims.w = s.w;
+      delete s.e; delete s.w;
+      changed = true;
+    }
+    Object.keys(s.dims).forEach(function (k) {
+      if (!validIds[k]) { delete s.dims[k]; changed = true; }
+    });
+  });
+  if (changed) writeJSON(SCORES_FILE, scores);
+})();
+
 function findGroup(id) {
   return CONFIG.groups.find(function (g) { return g.id === id; }) || null;
 }
 function findRound(id) {
   return CONFIG.rounds.find(function (r) { return r.id === id; }) || null;
 }
+function dimOf(dimId, dims) {
+  const d = CONFIG.dimensions.find(function (x) { return x.id === dimId; });
+  return d ? levelOf(d.levels, dims && dims[dimId]) : null;
+}
 function levelOf(levels, key) {
   return (levels || []).find(function (l) { return l.key === key; }) || null;
 }
 
-/* ---------- 排名（旧版按组格式，仅用于兼容还没刷新缓存的旧页面） ---------- */
-function rankOf(group, r) {
-  const rs = scores.filter(function (s) { return s.r === r; });
-  const rows = CONFIG.candidates.map(function (c) {
-    const detail = rs
-      .filter(function (s) { return s.g === group.id && s.c === c.id; })
-      .map(function (s) {
-        const e = levelOf(CONFIG.expressLevels, s.e);
-        const w = levelOf(CONFIG.willingLevels, s.w);
-        if (!e || !w) return null;
-        return {
-          interviewer: s.i,
-          expressLabel: e.label, expressScore: e.score,
-          willingLabel: w.label, willingScore: w.score,
-          total: e.score + w.score
-        };
-      })
-      .filter(Boolean)
-      .sort(function (a, b) { return a.interviewer.localeCompare(b.interviewer, 'zh'); });
-
-    const n = detail.length;
-    let sum = 0;
-    detail.forEach(function (d) { sum += d.total; });
-
-    return {
-      id: c.id,
-      name: c.name,
-      cls: c.cls,
-      count: n,
-      total: CONFIG.interviewers.length,
-      avg: n ? Math.round(sum / n * 100) / 100 : null,
-      detail: detail
-    };
+/* 一条打分记录 -> { items:[{name,label,score}], total }（打分项是动态的，按当前配置的打分项算） */
+function detailOf(s) {
+  const dm = s.dims || {};
+  const items = [];
+  let total = 0;
+  CONFIG.dimensions.forEach(function (d) {
+    const lv = levelOf(d.levels, dm[d.id]);
+    if (lv) { items.push({ name: d.name, label: lv.label, score: lv.score }); total += lv.score; }
   });
-
-  const done = rows.filter(function (r) { return r.count > 0; })
-    .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
-  const todo = rows.filter(function (r) { return r.count === 0; })
-    .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
-
-  const out = done.concat(todo);
-  let last = null, lastRank = 0;
-  out.forEach(function (r, i) {
-    if (r.count === 0) { r.rank = null; return; }
-    if (last !== null && r.avg === last) { r.rank = lastRank; }
-    else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
-  });
-
-  return { groupId: group.id, groupName: group.name, rows: out };
+  return { items: items, total: total };
 }
 
-/* ---------- 排名：小组只是分场面试，一轮内所有组的打分合并成一份统一排名 ---------- */
-function unifiedRank(r) {
-  const rs = scores.filter(function (s) { return s.r === r; });
+/* 通用排名行：rs 为打分记录集合，pred 进一步筛选（按组等）；返回带竞争排名的行数组 */
+function rankRows(rs, pred) {
   const rows = CONFIG.candidates.map(function (c) {
-    const mine = rs.filter(function (s) { return s.c === c.id; });
+    const mine = rs.filter(function (s) { return s.c === c.id && (!pred || pred(s)); });
     const detail = mine
       .map(function (s) {
-        const e = levelOf(CONFIG.expressLevels, s.e);
-        const w = levelOf(CONFIG.willingLevels, s.w);
-        if (!e || !w) return null;
+        const dv = detailOf(s);
+        // 旧版页面兼容字段（固定两个打分项）
+        const eL = dimOf('e', s.dims || {});
+        const wL = dimOf('w', s.dims || {});
         return {
           interviewer: s.i,
-          expressLabel: e.label, expressScore: e.score,
-          willingLabel: w.label, willingScore: w.score,
-          total: e.score + w.score
+          items: dv.items,
+          total: dv.total,
+          expressLabel: eL ? eL.label : '',
+          expressScore: eL ? eL.score : 0,
+          willingLabel: wL ? wL.label : '',
+          willingScore: wL ? wL.score : 0
         };
       })
-      .filter(Boolean)
+      .filter(function (d) { return d.items.length > 0; })
       .sort(function (a, b) { return a.interviewer.localeCompare(b.interviewer, 'zh'); });
 
     const n = detail.length;
@@ -269,8 +300,23 @@ function unifiedRank(r) {
     if (last !== null && r.avg === last) { r.rank = lastRank; }
     else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
   });
+  return out;
+}
 
-  return { rows: out };
+/* ---------- 排名（旧版按组格式，仅用于兼容还没刷新缓存的旧页面） ---------- */
+function rankOf(group, r) {
+  const rs = scores.filter(function (s) { return s.r === r; });
+  return {
+    groupId: group.id,
+    groupName: group.name,
+    rows: rankRows(rs, function (s) { return s.g === group.id; })
+  };
+}
+
+/* ---------- 排名：小组只是分场面试，一轮内所有组的打分合并成一份统一排名 ---------- */
+function unifiedRank(r) {
+  const rs = scores.filter(function (s) { return s.r === r; });
+  return { rows: rankRows(rs, null) };
 }
 
 /* ---------- HTTP ---------- */
@@ -322,18 +368,23 @@ const server = http.createServer(function (req, res) {
 
   /* ---- 读取名单与评分标准 ---- */
   if (p === '/api/config' && method === 'GET') {
-    return json(res, 200, {
+    const out = {
       title: CONFIG.title,
-      expressLevels: CONFIG.expressLevels,
-      willingLevels: CONFIG.willingLevels,
+      dimensions: CONFIG.dimensions,
       interviewers: CONFIG.interviewers,
       candidates: CONFIG.candidates,
       groups: CONFIG.groups,
       rounds: CONFIG.rounds
-    });
+    };
+    // 旧版页面兼容：固定两个打分项的等级表
+    const eDim = CONFIG.dimensions.find(function (d) { return d.id === 'e'; });
+    const wDim = CONFIG.dimensions.find(function (d) { return d.id === 'w'; });
+    if (eDim) out.expressLevels = eDim.levels;
+    if (wDim) out.willingLevels = wDim.levels;
+    return json(res, 200, out);
   }
 
-  /* ---- 某位面试官在某轮已打的分 ---- */
+  /* ---- 某位面试官在某轮已打的分（dims：打分项id -> 等级key） ---- */
   if (p === '/api/mine' && method === 'GET') {
     const g = u.searchParams.get('g') || '';
     const i = u.searchParams.get('i') || '';
@@ -341,7 +392,7 @@ const server = http.createServer(function (req, res) {
     return json(res, 200, {
       list: scores
         .filter(function (s) { return s.r === rd.id && s.g === g && s.i === i; })
-        .map(function (s) { return { c: s.c, e: s.e, w: s.w }; })
+        .map(function (s) { return { c: s.c, dims: s.dims || {} }; })
     });
   }
 
@@ -369,8 +420,25 @@ const server = http.createServer(function (req, res) {
       if (!CONFIG.candidates.some(function (c) { return c.id === d.c; })) {
         return json(res, 400, { error: '面试者不在名单中' });
       }
-      if (!levelOf(CONFIG.expressLevels, d.e)) return json(res, 400, { error: '表达能力等级无效' });
-      if (!levelOf(CONFIG.willingLevels, d.w)) return json(res, 400, { error: '意愿等级无效' });
+      // 校验各打分项等级：d.dims（新版）或 d.e / d.w（旧版页面兼容）
+      const dimsIn = {};
+      const badDims = [];
+      if (d.dims && typeof d.dims === 'object') {
+        Object.keys(d.dims).forEach(function (k) {
+          const dm = CONFIG.dimensions.find(function (x) { return x.id === k; });
+          if (!dm || !levelOf(dm.levels, d.dims[k])) { badDims.push(k); return; }
+          dimsIn[k] = d.dims[k];
+        });
+      }
+      if (d.e !== undefined || d.w !== undefined) {
+        [['e', d.e], ['w', d.w]].forEach(function (pair) {
+          const dm = CONFIG.dimensions.find(function (x) { return x.id === pair[0]; });
+          if (pair[1] && (dm ? levelOf(dm.levels, pair[1]) : null)) dimsIn[pair[0]] = pair[1];
+          else if (pair[1]) badDims.push(pair[0]);
+        });
+      }
+      if (badDims.length) return json(res, 400, { error: '打分项或等级无效' });
+      if (!Object.keys(dimsIn).length) return json(res, 400, { error: '没有打分内容' });
 
       /* 同一轮内一位面试者只由一个组评分：该轮里已被其他组评过、本组还没评过的，拒绝 */
       const inRound = scores.filter(function (s) { return s.r === rd.id; });
@@ -380,9 +448,13 @@ const server = http.createServer(function (req, res) {
         return json(res, 400, { error: '该面试者已由「' + (og ? og.name : '其他组') + '」评分，其他组不能再评' });
       }
 
+      /* 覆盖式更新：同一条记录里逐项合并（旧页面只发 e/w 时不会清掉其他打分项） */
       const old = inRound.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
-      if (old) { old.e = d.e; old.w = d.w; }
-      else scores.push({ r: rd.id, g: d.g, c: d.c, i: d.i, e: d.e, w: d.w });
+      if (old) {
+        old.dims = Object.assign({}, old.dims || {}, dimsIn);
+      } else {
+        scores.push({ r: rd.id, g: d.g, c: d.c, i: d.i, dims: dimsIn });
+      }
       writeJSON(SCORES_FILE, scores);
       return json(res, 200, { ok: true });
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
@@ -426,7 +498,10 @@ const server = http.createServer(function (req, res) {
                         { kind:'cd', op:'batch', items:[{name,cls}, ...] }
      轮次（各轮共用同一套小组与面试官，分数按轮分开）：
                         { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」
-                        { kind:'rd', op:'del', id }      删除该轮全部打分 */
+                        { kind:'rd', op:'del', id }      删除该轮全部打分
+     打分项（动态维度，每项若干等级 { label, score }）：
+                        { kind:'dim', op:'add', name, levels:[{label,score}, ...] }
+                        { kind:'dim', op:'del', id }      删除该打分项及其在所有打分里的分数 */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
       let d;
@@ -526,6 +601,44 @@ const server = http.createServer(function (req, res) {
         }
         writeJSON(CONFIG_FILE, CONFIG);
         return json(res, 200, { ok: true, rounds: rounds });
+      }
+
+      /* --- 打分项：动态维度（每项若干等级），所有组/轮共用 --- */
+      if (d.kind === 'dim') {
+        const dims = CONFIG.dimensions;
+        if (d.op === 'add') {
+          const name = str(d.name);
+          if (!name) return json(res, 400, { error: '打分项名称不能为空' });
+          if (name.length > 10) return json(res, 400, { error: '名称太长了' });
+          if (dims.some(function (x) { return x.name === name; })) {
+            return json(res, 400, { error: '「' + name + '」已经有了' });
+          }
+          const levels = (Array.isArray(d.levels) ? d.levels : [])
+            .map(function (lv, i) {
+              const label = str(lv && lv.label);
+              const sc = Number(lv && lv.score);
+              return (label && label.length <= 10 && isFinite(sc) && sc >= 0 && sc <= 999)
+                ? { key: 'lv' + i, label: label, score: Math.round(sc) }
+                : null;
+            })
+            .filter(Boolean);
+          if (!levels.length) return json(res, 400, { error: '至少需要一个等级（格式：等级名 分值，每行一个）' });
+          if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
+          dims.push({ id: 'd_' + crypto.randomBytes(3).toString('hex'), name: name, levels: levels });
+        } else if (d.op === 'del') {
+          if (dims.length <= 1) return json(res, 400, { error: '至少保留一个打分项' });
+          const id = str(d.id);
+          const idx = dims.findIndex(function (x) { return x.id === id; });
+          if (idx < 0) return json(res, 400, { error: '打分项不存在' });
+          dims.splice(idx, 1);
+          // 级联：把该打分项从所有打分记录里移除
+          scores.forEach(function (s) { if (s.dims && s.dims[id]) delete s.dims[id]; });
+          writeJSON(SCORES_FILE, scores);
+        } else {
+          return json(res, 400, { error: '操作错误' });
+        }
+        writeJSON(CONFIG_FILE, CONFIG);
+        return json(res, 200, { ok: true, dimensions: dims });
       }
 
       return json(res, 400, { error: '类型错误' });
