@@ -136,6 +136,15 @@ function normalize(cfg) {
     });
   }
 
+  // 小组：分场面试用，可在 App 里增删
+  if (!Array.isArray(cfg.groups) || !cfg.groups.length) {
+    cfg.groups = SEED.groups.map(function (g) { return { id: g.id, name: g.name }; });
+  } else {
+    cfg.groups = cfg.groups.map(function (g) {
+      return { id: str(g && g.id) || 'g_' + crypto.randomBytes(3).toString('hex'), name: str(g && g.name) || '小组' };
+    });
+  }
+
   // 打分项：旧版固定两个（expressLevels / willingLevels），统一成动态 dimensions
   const normLv = function (lv, i) {
     return {
@@ -319,6 +328,56 @@ function unifiedRank(r) {
   return { rows: rankRows(rs, null) };
 }
 
+/* ---------- 总排名：跨所有轮次、所有小组，综合成一份总平均分排名（明细里标注每条分数来自哪一轮） ---------- */
+function overallRank() {
+  const rows = CONFIG.candidates.map(function (c) {
+    const mine = scores.filter(function (s) { return s.c === c.id; });
+    const detail = mine
+      .map(function (s) {
+        const dv = detailOf(s);
+        const rd = findRound(s.r);
+        return {
+          interviewer: s.i,
+          round: rd ? rd.name : '',
+          items: dv.items,
+          total: dv.total
+        };
+      })
+      .filter(function (d) { return d.items.length > 0; })
+      .sort(function (a, b) {
+        return a.interviewer.localeCompare(b.interviewer, 'zh') || a.round.localeCompare(b.round, 'zh');
+      });
+
+    const n = detail.length;
+    let sum = 0;
+    detail.forEach(function (d) { sum += d.total; });
+
+    return {
+      id: c.id,
+      name: c.name,
+      cls: c.cls,
+      count: n,
+      avg: n ? Math.round(sum / n * 100) / 100 : null,
+      detail: detail,
+      comment: c.comment || null
+    };
+  });
+
+  const done = rows.filter(function (r) { return r.count > 0; })
+    .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
+  const todo = rows.filter(function (r) { return r.count === 0; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
+
+  const out = done.concat(todo);
+  let last = null, lastRank = 0;
+  out.forEach(function (r, i) {
+    if (r.count === 0) { r.rank = null; return; }
+    if (last !== null && r.avg === last) { r.rank = lastRank; }
+    else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
+  });
+  return out;
+}
+
 /* ---------- HTTP ---------- */
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
@@ -480,8 +539,11 @@ const server = http.createServer(function (req, res) {
     }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
   }
 
-  /* ---- 排名（按轮次；rows 给新版页面，groups 兼容旧版页面；不带 r 默认第一轮） ---- */
+  /* ---- 排名（按轮次；rows 给新版页面，groups 兼容旧版页面；不带 r 默认第一轮；overall=1 跨所有轮次总排名） ---- */
   if (p === '/api/rank' && method === 'GET') {
+    if (u.searchParams.get('overall') === '1') {
+      return json(res, 200, { overall: true, rows: overallRank() });
+    }
     const rd = findRound(u.searchParams.get('r')) || CONFIG.rounds[0];
     return json(res, 200, {
       round: rd.id,
@@ -496,11 +558,16 @@ const server = http.createServer(function (req, res) {
      面试者（全局共用）：{ kind:'cd', op:'add', name, cls }
                         { kind:'cd', op:'del', id }
                         { kind:'cd', op:'batch', items:[{name,cls}, ...] }
+     小组（分场面试，只在组内记分）：{ kind:'gp', op:'add', name? }  不传 name 自动编号「第N组」
+                                      { kind:'gp', op:'del', id }    删除该组所有轮次里的打分
      轮次（各轮共用同一套小组与面试官，分数按轮分开）：
                         { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」
                         { kind:'rd', op:'del', id }      删除该轮全部打分
      打分项（动态维度，每项若干等级 { label, score }）：
                         { kind:'dim', op:'add', name, levels:[{label,score}, ...] }
+                        { kind:'dim', op:'edit', id, levels:[{key?,label,score}, ...] }
+                                                                  改等级名称/分值；历史分数引用的 key 不变，
+                                                                  排名按新分值即时重算
                         { kind:'dim', op:'del', id }      删除该打分项及其在所有打分里的分数 */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
@@ -577,6 +644,32 @@ const server = http.createServer(function (req, res) {
         return json(res, 400, { error: '操作错误' });
       }
 
+      /* --- 小组：分场面试用，增删即可；删组时该组所有轮次的分数一并清除 --- */
+      if (d.kind === 'gp') {
+        const gps = CONFIG.groups;
+        if (d.op === 'add') {
+          const name = str(d.name) || ('第' + (gps.length + 1) + '组');
+          if (name.length > 10) return json(res, 400, { error: '组名太长了' });
+          if (gps.some(function (x) { return x.name === name; })) {
+            return json(res, 400, { error: '已经有「' + name + '」了' });
+          }
+          gps.push({ id: 'g_' + crypto.randomBytes(3).toString('hex'), name: name });
+        } else if (d.op === 'del') {
+          if (gps.length <= 1) return json(res, 400, { error: '至少保留一个小组' });
+          const id = str(d.id);
+          const idx = gps.findIndex(function (x) { return x.id === id; });
+          if (idx < 0) return json(res, 400, { error: '小组不存在' });
+          gps.splice(idx, 1);
+          // 同步清掉该组所有轮次里的打分
+          scores = scores.filter(function (s) { return s.g !== id; });
+          writeJSON(SCORES_FILE, scores);
+        } else {
+          return json(res, 400, { error: '操作错误' });
+        }
+        writeJSON(CONFIG_FILE, CONFIG);
+        return json(res, 200, { ok: true, groups: gps });
+      }
+
       /* --- 轮次：各轮共用同一套小组与面试官，分数按轮分开统计 --- */
       if (d.kind === 'rd') {
         const rounds = CONFIG.rounds;
@@ -625,6 +718,26 @@ const server = http.createServer(function (req, res) {
           if (!levels.length) return json(res, 400, { error: '至少需要一个等级（格式：等级名 分值，每行一个）' });
           if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
           dims.push({ id: 'd_' + crypto.randomBytes(3).toString('hex'), name: name, levels: levels });
+        } else if (d.op === 'edit') {
+          const id = str(d.id);
+          const dim = dims.find(function (x) { return x.id === id; });
+          if (!dim) return json(res, 400, { error: '打分项不存在' });
+          const rawLv = Array.isArray(d.levels) ? d.levels : [];
+          const levels = [];
+          const usedKeys = Object.create(null);
+          rawLv.forEach(function (lv) {
+            const label = str(lv && lv.label);
+            const sc = Number(lv && lv.score);
+            if (!label || label.length > 10 || !isFinite(sc) || sc < 0 || sc > 999) return;
+            let key = str(lv && lv.key);
+            if (!key || usedKeys[key]) key = 'k_' + crypto.randomBytes(2).toString('hex');
+            usedKeys[key] = 1;
+            levels.push({ key: key, label: label, score: Math.round(sc) });
+          });
+          if (!levels.length) return json(res, 400, { error: '至少保留一个等级' });
+          if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
+          dim.levels = levels;
+          // 等级改了分值，历史打分记录里的等级 key 不变，排名会按新分值即时重算
         } else if (d.op === 'del') {
           if (dims.length <= 1) return json(res, 400, { error: '至少保留一个打分项' });
           const id = str(d.id);
