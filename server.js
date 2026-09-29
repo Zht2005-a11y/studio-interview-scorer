@@ -177,14 +177,24 @@ function normalize(cfg) {
       score: Number(lv && lv.score) || 0
     };
   };
+  /* 打分项两种类型：
+     - 选等级型（默认）：{ id, name, levels:[{key,label,score}] }
+     - 自由填分型：      { id, name, mode:'free', max } —— 面试官自己填 0~max 的分数
+     老数据没有 mode 字段，一律按「选等级型」处理，行为不变。 */
+  const normMax = function (v) {
+    const n = Number(v);
+    return (isFinite(n) && n >= 1 && n <= 999) ? Math.round(n) : 100;
+  };
+  const normDim = function (dm, di) {
+    const id = str(dm && dm.id) || 'd_' + crypto.randomBytes(3).toString('hex');
+    const name = str(dm && dm.name) || ('打分项' + (di + 1));
+    if (dm && dm.mode === 'free') {
+      return { id: id, name: name, mode: 'free', max: normMax(dm.max) };
+    }
+    return { id: id, name: name, levels: (Array.isArray(dm && dm.levels) ? dm.levels : []).map(normLv) };
+  };
   if (Array.isArray(cfg.dimensions) && cfg.dimensions.length) {
-    cfg.dimensions = cfg.dimensions.map(function (dm, di) {
-      return {
-        id: str(dm && dm.id) || 'd_' + crypto.randomBytes(3).toString('hex'),
-        name: str(dm && dm.name) || ('打分项' + (di + 1)),
-        levels: (Array.isArray(dm && dm.levels) ? dm.levels : []).map(normLv)
-      };
-    });
+    cfg.dimensions = cfg.dimensions.map(normDim);
   } else {
     const eLv = Array.isArray(cfg.expressLevels) && cfg.expressLevels.length
       ? cfg.expressLevels
@@ -298,12 +308,18 @@ function dimsOfRound(roundId) {
 }
 
 /* 一条打分记录 -> { items:[{name,label,score}], total }
-   总分只累计「该记录所属轮次考察范围之内」的打分项 —— 本轮不考察的项不计入 */
+   总分只累计「该记录所属轮次考察范围之内」的打分项 —— 本轮不考察的项不计入。
+   自由填分型没有 label，前端按 label 为空处理。 */
 function detailOf(s) {
   const dm = s.dims || {};
   const items = [];
   let total = 0;
   dimsOfRound(s.r).forEach(function (d) {
+    if (d.mode === 'free') {
+      const v = Number(dm[d.id]);
+      if (isFinite(v) && v >= 0) { items.push({ name: d.name, label: '', score: v }); total += v; }
+      return;
+    }
     const lv = levelOf(d.levels, dm[d.id]);
     if (lv) { items.push({ name: d.name, label: lv.label, score: lv.score }); total += lv.score; }
   });
@@ -545,16 +561,30 @@ const server = http.createServer(function (req, res) {
       if (d.dims && typeof d.dims === 'object') {
         Object.keys(d.dims).forEach(function (k) {
           const dm = CONFIG.dimensions.find(function (x) { return x.id === k; });
-          if (!dm || !levelOf(dm.levels, d.dims[k])) { badDims.push(k); return; }
+          if (!dm) { badDims.push(k); return; }
+          if (dm.mode === 'free') {
+            const v = Number(d.dims[k]);
+            if (!isFinite(v) || v < 0 || v > dm.max) { badDims.push(k); return; }
+            if (scope[k]) dimsIn[k] = Math.round(v);
+            return;
+          }
+          if (!levelOf(dm.levels, d.dims[k])) { badDims.push(k); return; }
           if (scope[k]) dimsIn[k] = d.dims[k];
         });
       }
       if (d.e !== undefined || d.w !== undefined) {
         [['e', d.e], ['w', d.w]].forEach(function (pair) {
           const dm = CONFIG.dimensions.find(function (x) { return x.id === pair[0]; });
-          if (pair[1] && (dm ? levelOf(dm.levels, pair[1]) : null)) {
-            if (scope[pair[0]]) dimsIn[pair[0]] = pair[1];
-          } else if (pair[1]) badDims.push(pair[0]);
+          if (!pair[1]) return;
+          if (!dm) { badDims.push(pair[0]); return; }
+          if (dm.mode === 'free') {
+            const v = Number(pair[1]);
+            if (!isFinite(v) || v < 0 || v > dm.max) { badDims.push(pair[0]); return; }
+            if (scope[pair[0]]) dimsIn[pair[0]] = Math.round(v);
+            return;
+          }
+          if (!levelOf(dm.levels, pair[1])) { badDims.push(pair[0]); return; }
+          if (scope[pair[0]]) dimsIn[pair[0]] = pair[1];
         });
       }
       if (badDims.length) return json(res, 400, { error: '打分项或等级无效' });
@@ -631,11 +661,13 @@ const server = http.createServer(function (req, res) {
                                                          显式配置本轮考察哪些打分项（自由增减，可为空）
                                                          新建打分项不会自动进入任何轮次
                         { kind:'rd', op:'del', id }      删除该轮全部打分
-     打分项（动态维度，每项若干等级 { label, score }）：
-                        { kind:'dim', op:'add', name, levels:[{label,score}, ...] }
-                        { kind:'dim', op:'edit', id, levels:[{key?,label,score}, ...] }
-                                                                  改等级名称/分值；历史分数引用的 key 不变，
-                                                                  排名按新分值即时重算
+     打分项（动态维度，两种类型；所有组/轮共用）：
+                        { kind:'dim', op:'add', name, levels:[{label,score}, ...] }   选等级型
+                        { kind:'dim', op:'add', name, mode:'free', max }              自由填分型
+                        { kind:'dim', op:'edit', id, name?, levels?, mode?, max? }
+                                                                  改名称 / 等级 / 类型；
+                                                                  选等级→自由填分 会把历史等级换算成分值，
+                                                                  自由填分→选等级 无法换算，会清掉该项历史分
                         { kind:'dim', op:'del', id }      删除该打分项及其在所有打分里的分数 */
   if (p === '/api/manage' && method === 'POST') {
     return readBody(req).then(function (raw) {
@@ -799,7 +831,7 @@ const server = http.createServer(function (req, res) {
         return json(res, 200, { ok: true, rounds: rounds });
       }
 
-      /* --- 打分项：动态维度（每项若干等级），所有组/轮共用 --- */
+      /* --- 打分项：动态维度，两种类型（选等级 / 自由填分），所有组/轮共用 --- */
       if (d.kind === 'dim') {
         const dims = CONFIG.dimensions;
         if (d.op === 'add') {
@@ -808,6 +840,17 @@ const server = http.createServer(function (req, res) {
           if (name.length > 10) return json(res, 400, { error: '名称太长了' });
           if (dims.some(function (x) { return x.name === name; })) {
             return json(res, 400, { error: '「' + name + '」已经有了' });
+          }
+          const newId = 'd_' + crypto.randomBytes(3).toString('hex');
+          // 自由填分型：只要名称 + 满分，面试官自己填分
+          if (d.mode === 'free') {
+            const max = Number(d.max);
+            if (!isFinite(max) || max < 1 || max > 999) {
+              return json(res, 400, { error: '满分要填 1~999' });
+            }
+            dims.push({ id: newId, name: name, mode: 'free', max: Math.round(max) });
+            writeJSON(CONFIG_FILE, CONFIG);
+            return json(res, 200, { ok: true, dimensions: dims, rounds: CONFIG.rounds });
           }
           const levels = (Array.isArray(d.levels) ? d.levels : [])
             .map(function (lv, i) {
@@ -820,7 +863,7 @@ const server = http.createServer(function (req, res) {
             .filter(Boolean);
           if (!levels.length) return json(res, 400, { error: '至少需要一个等级（格式：等级名 分值，每行一个）' });
           if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
-          dims.push({ id: 'd_' + crypto.randomBytes(3).toString('hex'), name: name, levels: levels });
+          dims.push({ id: newId, name: name, levels: levels });
         } else if (d.op === 'edit') {
           const id = str(d.id);
           const dim = dims.find(function (x) { return x.id === id; });
@@ -835,6 +878,33 @@ const server = http.createServer(function (req, res) {
               return json(res, 400, { error: '「' + newName + '」已经有了' });
             }
           }
+          const oldMode = dim.mode === 'free' ? 'free' : 'level';
+          const wantMode = d.mode === 'free' ? 'free' : (d.mode === 'level' ? 'level' : oldMode);
+
+          /* 自由填分型：校验满分即可，不需要等级 */
+          if (wantMode === 'free') {
+            const max = d.max === undefined ? (dim.max || 100) : Number(d.max);
+            if (!isFinite(max) || max < 1 || max > 999) {
+              return json(res, 400, { error: '满分要填 1~999' });
+            }
+            if (newName) dim.name = newName;
+            if (oldMode === 'level') {
+              /* 选等级 → 自由填分：把历史记录里的等级换算成对应分值，尽量不丢分 */
+              scores.forEach(function (s) {
+                const lv = levelOf(dim.levels, s.dims && s.dims[id]);
+                if (lv) s.dims[id] = Math.min(lv.score, Math.round(max));
+                else if (s.dims && s.dims[id] !== undefined) delete s.dims[id];
+              });
+              writeJSON(SCORES_FILE, scores);
+              delete dim.levels;
+            }
+            dim.mode = 'free';
+            dim.max = Math.round(max);
+            writeJSON(CONFIG_FILE, CONFIG);
+            return json(res, 200, { ok: true, dimensions: dims, rounds: CONFIG.rounds });
+          }
+
+          /* 选等级型 */
           const rawLv = Array.isArray(d.levels) ? d.levels : [];
           const levels = [];
           const usedKeys = Object.create(null);
@@ -850,6 +920,13 @@ const server = http.createServer(function (req, res) {
           if (!levels.length) return json(res, 400, { error: '至少保留一个等级' });
           if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
           if (newName) dim.name = newName;
+          if (oldMode === 'free') {
+            /* 自由填分 → 选等级：自由分没法换算成等级，只能把该项的历史分数清掉 */
+            scores.forEach(function (s) { if (s.dims) delete s.dims[id]; });
+            writeJSON(SCORES_FILE, scores);
+            delete dim.mode;
+            delete dim.max;
+          }
           dim.levels = levels;
           // 等级改了分值，历史打分记录里的等级 key 不变，排名会按新分值即时重算
         } else if (d.op === 'del') {

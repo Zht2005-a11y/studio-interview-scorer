@@ -405,6 +405,11 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 .dim-card:last-child{margin-bottom:0}
 .dim-main{flex:1;min-width:0}
 .dim-name{font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-.25px}
+.dim-mode{
+  display:inline-block;margin-left:7px;vertical-align:1px;
+  font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  padding:2px 8px;border-radius:999px;letter-spacing:0;
+}
 .dim-meta{font-size:12.5px;color:var(--ink3);margin-top:3px}
 .dim-lvs{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
 .dim-lv{
@@ -426,6 +431,40 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 }
 .btn-new:active{transform:scale(.985)}
 .btn-new i{font-style:normal;font-size:20px;font-weight:600;line-height:1;margin-top:-1px}
+
+/* ---------- 打分项类型切换（选等级 / 自由填分） ---------- */
+.seg{display:flex;gap:4px;padding:4px;background:#f5f7fb;border:1px solid var(--line);border-radius:14px}
+.seg button{
+  flex:1;padding:12px 8px;border-radius:11px;font-size:14.5px;font-weight:600;
+  color:var(--ink2);transition:.16s;
+}
+.seg button.on{background:#fff;color:var(--brand);box-shadow:0 2px 8px rgba(16,24,40,.08)}
+.seg button:active{transform:scale(.97)}
+.free-preview{
+  display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;
+  background:#f8fafd;border:1.5px dashed var(--line2);
+}
+.free-preview b{font-size:24px;font-weight:800;color:var(--brand);letter-spacing:-.6px}
+.free-preview span{font-size:13px;color:var(--ink3)}
+.free-preview em{font-style:normal;font-size:12.5px;color:var(--ink2);margin-left:auto}
+
+/* ---------- 打分面板：自由填分控件 ---------- */
+.grade-label em{
+  float:right;font-style:normal;font-weight:500;font-size:11.5px;color:var(--ink3);
+}
+.free-row{display:flex;align-items:center;gap:10px}
+.free-input{
+  flex:1;min-width:0;padding:16px 18px;border-radius:15px;
+  border:1.5px solid var(--line);background:#f8fafd;
+  font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.6px;
+  outline:none;text-align:center;transition:.16s;
+}
+.free-input::placeholder{font-size:15px;font-weight:500;letter-spacing:0;color:var(--ink3)}
+.free-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.free-input.bad{border-color:var(--bad);background:#fff8f7}
+.free-unit{flex:none;font-size:15px;font-weight:700;color:var(--ink3)}
+.free-hint{font-size:12px;color:var(--ink3);margin-top:8px;text-align:center}
+.free-hint.bad{color:#b54708;font-weight:600}
 
 /* ---------- 打分项表单弹窗（新建 / 编辑等级） ---------- */
 .sheet-foot.row{display:flex;gap:10px}
@@ -624,11 +663,25 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     for (var i = 0; i < CFG.dimensions.length; i++) if (CFG.dimensions[i].id === id) return CFG.dimensions[i];
     return null;
   }
-  function dimScore(id, key) {
+  /* 打分项两种类型：
+     - 选等级型（默认）：{ id, name, levels:[{key,label,score}] } —— 选一个等级，分值固定
+     - 自由填分型：      { id, name, mode:'free', max } —— 面试官自己填 0~max */
+  function dimIsFree(dm) { return !!dm && dm.mode === 'free'; }
+  function dimScore(id, val) {
     var dm = dimById(id);
     if (!dm) return 0;
-    for (var i = 0; i < dm.levels.length; i++) if (dm.levels[i].key === key) return dm.levels[i].score;
+    if (dimIsFree(dm)) { var n = Number(val); return isFinite(n) ? n : 0; }
+    for (var i = 0; i < dm.levels.length; i++) if (dm.levels[i].key === val) return dm.levels[i].score;
     return 0;
+  }
+  /* 这一项是否已作答（自由填分型 0 分也算作答，不能当成"没填"） */
+  function dimAnswered(dm, val) {
+    if (val === null || val === undefined || val === '') return false;
+    if (dimIsFree(dm)) {
+      var n = Number(val);
+      return isFinite(n) && n >= 0 && n <= (dm.max || 100);
+    }
+    return !!val;
   }
   function dimTotal(dims) {
     var t = 0;
@@ -653,20 +706,22 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   /* 某份打分记录在「某一轮」口径下的总分（本轮不考察的项不计入） */
   function roundTotal(dims, roundId) {
     var t = 0;
-    roundDims(roundId).forEach(function (d) { if (dims && dims[d.id]) t += dimScore(d.id, dims[d.id]); });
+    roundDims(roundId).forEach(function (d) {
+      if (dimAnswered(d, dims ? dims[d.id] : null)) t += dimScore(d.id, dims[d.id]);
+    });
     return t;
   }
-  /* 本轮是否已打完整（本轮考察的每一项都选了） */
+  /* 本轮是否已打完整（本轮考察的每一项都作答了） */
   function isDone(cid) {
     var s = MY[cid];
     if (!s) return false;
     var ds = curDims();
-    return ds.length > 0 && ds.every(function (d) { return !!s[d.id]; });
+    return ds.length > 0 && ds.every(function (d) { return dimAnswered(d, s[d.id]); });
   }
-  /* 本轮还差几项没选 */
+  /* 本轮还差几项没作答 */
   function dimsMissing(dims) {
     var n = 0;
-    curDims().forEach(function (d) { if (!dims || !dims[d.id]) n++; });
+    curDims().forEach(function (d) { if (!dimAnswered(d, dims ? dims[d.id] : null)) n++; });
     return n;
   }
   function dimsLabel(roundId) {
@@ -677,11 +732,17 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   function dimsMax(roundId) {
     var m = 0;
     roundDims(roundId).forEach(function (d) {
+      if (dimIsFree(d)) { m += (d.max || 100); return; }
       var mx = 0;
       d.levels.forEach(function (lv) { if (lv.score > mx) mx = lv.score; });
       m += mx;
     });
     return m;
+  }
+  /* 一项的简要描述（用于轮次勾选列表等） */
+  function dimBrief(d) {
+    if (dimIsFree(d)) return '自由填分 0~' + (d.max || 100);
+    return d.levels.map(function (lv) { return lv.label + ' ' + lv.score; }).join(' / ');
   }
   /* 某个打分项被哪些轮次考察（完全按各轮的显式列表算） */
   function dimUsage(dimId) {
@@ -994,17 +1055,34 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     return h + '</div></div>';
   }
 
+  /* 自由填分型：一个数字输入框，面试官自己填 0~max */
+  function freeBlock(dim, val) {
+    var v = (val === null || val === undefined) ? '' : String(val);
+    return '<div class="grade-block">' +
+      '<div class="grade-label">' + esc(dim.name) + '<em>0 ~ ' + dim.max + ' 分</em></div>' +
+      '<div class="free-row">' +
+        '<input class="free-input" id="free_' + esc(dim.id) + '" data-dim="' + esc(dim.id) + '"' +
+        ' inputmode="decimal" maxlength="6" placeholder="填分数" value="' + esc(v) + '">' +
+        '<span class="free-unit">分</span>' +
+      '</div>' +
+      '<div class="free-hint" id="freehint_' + esc(dim.id) + '">满分 ' + dim.max + ' 分，自己填</div>' +
+    '</div>';
+  }
+
   function openSheet(c) {
     var prev = MY[c.id] || {};
     var rd = curRound();
     /* 只渲染「本轮考察范围」里的打分项 —— 各轮范围可以不同 */
     var ds = roundDims(rd ? rd.id : null);
     var pend = {};
-    ds.forEach(function (dm) { pend[dm.id] = prev[dm.id] || null; });
+    ds.forEach(function (dm) { pend[dm.id] = dimAnswered(dm, prev[dm.id]) ? prev[dm.id] : null; });
     var origCm = c.comment ? c.comment.text : '';
 
     var blocks = '';
-    ds.forEach(function (dm) { blocks += gradeBlock(dm.name, dm.id, dm.levels, pend[dm.id]); });
+    ds.forEach(function (dm) {
+      blocks += dimIsFree(dm) ? freeBlock(dm, pend[dm.id])
+                              : gradeBlock(dm.name, dm.id, dm.levels, pend[dm.id]);
+    });
     if (!ds.length) {
       blocks = '<div class="card hint warn" style="margin-top:16px">' +
         '这一轮还没勾选考察的打分项，打不了分。<br>' +
@@ -1036,11 +1114,11 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     var cmBox = $('#cmBox');
 
     function gradeOk() {
-      return ds.length > 0 && ds.every(function (dm) { return !!pend[dm.id]; });
+      return ds.length > 0 && ds.every(function (dm) { return dimAnswered(dm, pend[dm.id]); });
     }
     function gradeSum() {
       var sum = 0;
-      ds.forEach(function (dm) { if (pend[dm.id]) sum += dimScore(dm.id, pend[dm.id]); });
+      ds.forEach(function (dm) { if (dimAnswered(dm, pend[dm.id])) sum += dimScore(dm.id, pend[dm.id]); });
       return sum;
     }
 
@@ -1049,6 +1127,20 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       var cmOk = cmBox.value.trim() !== origCm;   // 评语有改动才允许「只存评语」
       $('#totalNum').textContent = ok ? (gradeSum() + ' 分') : '—';
       $('#saveBtn').disabled = !(ok || cmOk);
+      /* 自由填分越界时标红 */
+      ds.forEach(function (dm) {
+        if (!dimIsFree(dm)) return;
+        var inp = $('#free_' + dm.id);
+        if (!inp) return;
+        var raw = inp.value.trim();
+        var bad = raw !== '' && !dimAnswered(dm, raw);
+        inp.classList.toggle('bad', bad);
+        var hint = $('#freehint_' + dm.id);
+        if (hint) {
+          hint.className = 'free-hint' + (bad ? ' bad' : '');
+          hint.textContent = bad ? ('要填 0 ~ ' + dm.max + ' 之间的分数') : ('满分 ' + dm.max + ' 分，自己填');
+        }
+      });
     }
 
     sheet.querySelectorAll('.grade').forEach(function (btn) {
@@ -1062,13 +1154,30 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       };
     });
 
+    /* 自由填分：数字输入框 */
+    ds.forEach(function (dm) {
+      if (!dimIsFree(dm)) return;
+      var inp = $('#free_' + dm.id);
+      if (!inp) return;
+      inp.oninput = function () {
+        inp.value = inp.value.replace(/[^0-9.]/g, '');
+        pend[dm.id] = inp.value.trim() === '' ? null : Number(inp.value);
+        refresh();
+      };
+      inp.onfocus = function () {
+        setTimeout(function () {
+          try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+        }, 280);
+      };
+    });
+
     $('#sheetClose').onclick = hideSheets;
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
       var cmText = cmBox.value.trim();
       var hasGrade = gradeOk();
       var dims = {};
-      ds.forEach(function (dm) { if (pend[dm.id]) dims[dm.id] = pend[dm.id]; });
+      ds.forEach(function (dm) { if (dimAnswered(dm, pend[dm.id])) dims[dm.id] = pend[dm.id]; });
       var jobs = [];
       if (cmText !== origCm) jobs.push(post('/api/comment', { c: c.id, text: cmText, by: ME.interviewer }));
       if (hasGrade) jobs.push(post('/api/score', { r: rd ? rd.id : '', g: CURGROUP, c: c.id, i: ME.interviewer, dims: dims }));
@@ -1277,7 +1386,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
         : '';
       detail.innerHTML = cmHtml + r.detail.map(function (d) {
         var parts = (d.items || []).map(function (it) {
-          return esc(it.name) + ' ' + esc(it.label) + ' ' + it.score;
+          return esc(it.name) + (it.label ? ' ' + esc(it.label) : '') + ' ' + it.score;
         }).join(' + ');
         var who = esc(d.interviewer) + (d.round ? '（' + esc(d.round) + '）' : '');
         return '<div class="d-row"><span>' + who + (parts ? '　' + parts : '') + '</span><b>' + d.total + '</b></div>';
@@ -1395,16 +1504,22 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 
   /* 单个打分项的卡片 */
   function dimCard(dm, canDel) {
-    var scores = dm.levels.map(function (lv) { return lv.score; });
-    var range = scores.length ? Math.min.apply(null, scores) + ' ~ ' + Math.max.apply(null, scores) + ' 分' : '没有等级';
+    var free = dimIsFree(dm);
+    var scores = free ? [] : dm.levels.map(function (lv) { return lv.score; });
+    var range = free
+      ? '0 ~ ' + (dm.max || 100) + ' 分'
+      : (scores.length ? Math.min.apply(null, scores) + ' ~ ' + Math.max.apply(null, scores) + ' 分' : '没有等级');
     var c = el('div', 'dim-card');
     c.innerHTML =
       '<div class="dim-main">' +
-        '<div class="dim-name">' + esc(dm.name) + '</div>' +
-        '<div class="dim-meta">' + dm.levels.length + ' 个等级 · ' + range + '</div>' +
-        '<div class="dim-lvs">' + dm.levels.map(function (lv) {
-          return '<span class="dim-lv">' + esc(lv.label) + '<b>' + lv.score + '</b></span>';
-        }).join('') + '</div>' +
+        '<div class="dim-name">' + esc(dm.name) +
+          (free ? '<span class="dim-mode">自由填分</span>' : '') + '</div>' +
+        '<div class="dim-meta">' + (free ? '面试官自己填分 · ' : dm.levels.length + ' 个等级 · ') + range + '</div>' +
+        '<div class="dim-lvs">' + (free
+          ? '<span class="dim-lv">自由填分<b>0~' + (dm.max || 100) + '</b></span>'
+          : dm.levels.map(function (lv) {
+              return '<span class="dim-lv">' + esc(lv.label) + '<b>' + lv.score + '</b></span>';
+            }).join('')) + '</div>' +
         '<div class="dim-use">' + esc(dimUsage(dm.id)) + '</div>' +
       '</div>' +
       '<div class="dim-acts">' +
@@ -1431,30 +1546,41 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   function openDimCreator() {
     openDimForm({
       title: '新建打分项',
-      sub: '填好名称和等级，点「保存打分项」',
+      sub: '选一种打分方式：固定等级，或让面试官自由填分',
       saveText: '保存打分项',
       name: '',
+      mode: 'level',
+      max: 100,
       rows: [
         { key: '', label: '', score: '', ph: ['如 偏弱', '60'] },
         { key: '', label: '', score: '', ph: ['如 良好', '75'] },
         { key: '', label: '', score: '', ph: ['如 优秀', '90'] }
       ],
-      onSave: function (p) { return dimManage('add', { name: p.name, levels: p.levels }); }
+      onSave: function (p) {
+        return dimManage('add', { name: p.name, mode: p.mode, max: p.max, levels: p.levels });
+      }
     });
   }
 
-  /* 编辑已有打分项：改名称 + 增删改等级 */
+  /* 编辑已有打分项：改名称 / 类型 / 等级 */
   function openLevelEditor(id) {
     var ed = dimById(id);
     if (!ed) return;
+    var free = dimIsFree(ed);
     openDimForm({
       title: '编辑打分项',
-      sub: '改名称 / 等级后点保存，历史分数按新分值重算',
+      sub: free ? '改名称或满分；换成「选等级」会清掉该项历史分数'
+                : '改名称 / 等级后点保存，历史分数按新分值重算',
       saveText: '保存修改',
       name: ed.name,
       selfId: id,
-      rows: ed.levels.map(function (l) { return { key: l.key, label: l.label, score: l.score }; }),
-      onSave: function (p) { return dimManage('edit', { id: id, name: p.name, levels: p.levels }); }
+      mode: free ? 'free' : 'level',
+      origMode: free ? 'free' : 'level',
+      max: ed.max || 100,
+      rows: free ? [] : ed.levels.map(function (l) { return { key: l.key, label: l.label, score: l.score }; }),
+      onSave: function (p) {
+        return dimManage('edit', { id: id, name: p.name, mode: p.mode, max: p.max, levels: p.levels });
+      }
     });
   }
 
@@ -1480,12 +1606,25 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       '<div class="sheet-body">' +
         '<div class="f-label">打分项名称 <em id="dfNameCnt">0/10</em></div>' +
         '<input class="f-input" id="dfName" maxlength="10" placeholder="如 项目经验">' +
-        '<div class="f-label">等级 <em>等级名 1~10 字，分值 0~999</em></div>' +
-        '<div class="lv-head"><span class="h-l">等级名称</span><span class="h-s">分值</span><span class="h-d"></span></div>' +
-        '<div id="dfRows"></div>' +
-        '<button class="lv-add" id="dfLvAdd">＋ 添加等级</button>' +
+        '<div class="f-label">打分方式 <em id="dfModeHint"></em></div>' +
+        '<div class="seg" id="dfMode">' +
+          '<button type="button" data-mode="level">选等级 · 分值固定</button>' +
+          '<button type="button" data-mode="free">自由填分</button>' +
+        '</div>' +
+        '<div id="dfLevelBox">' +
+          '<div class="f-label">等级 <em>等级名 1~10 字，分值 0~999</em></div>' +
+          '<div class="lv-head"><span class="h-l">等级名称</span><span class="h-s">分值</span><span class="h-d"></span></div>' +
+          '<div id="dfRows"></div>' +
+          '<button class="lv-add" id="dfLvAdd">＋ 添加等级</button>' +
+        '</div>' +
+        '<div id="dfFreeBox" hidden>' +
+          '<div class="f-label">满分 <em>1~999</em></div>' +
+          '<input class="f-input" id="dfMax" inputmode="numeric" maxlength="3" placeholder="100">' +
+          '<div class="hint" style="margin-top:10px"><span style="font-size:12.5px;color:#98a2b3">' +
+          '这一项不设等级：打分时面试官自己填 0 ~ 满分之间的分数。</span></div>' +
+        '</div>' +
         '<div class="f-label">预览 <em>打分页上会这样显示</em></div>' +
-        '<div class="lv-preview" id="dfPv"></div>' +
+        '<div id="dfPv"></div>' +
         '<div class="form-msg" id="dfMsg"></div>' +
       '</div>' +
       '<div class="sheet-foot row">' +
@@ -1496,7 +1635,10 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 
     var nameEl = $('#dfName');
     var rowsEl = $('#dfRows');
+    var maxEl = $('#dfMax');
     var name = String(cfg.name || '');
+    var mode = cfg.mode === 'free' ? 'free' : 'level';
+    var origMode = cfg.origMode === 'free' ? 'free' : 'level';
     var rows = (cfg.rows || []).map(function (r) {
       return {
         key: r.key || '',
@@ -1509,6 +1651,29 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     var dirty = false;
     var tried = false;
     nameEl.value = name;
+    maxEl.value = String(cfg.max || 100);
+
+    /* 切换「选等级 / 自由填分」 */
+    function drawMode() {
+      sheet.querySelectorAll('#dfMode button').forEach(function (b) {
+        b.className = b.getAttribute('data-mode') === mode ? 'on' : '';
+      });
+      $('#dfLevelBox').hidden = (mode !== 'level');
+      $('#dfFreeBox').hidden = (mode !== 'free');
+      $('#dfModeHint').textContent = mode === 'free' ? '面试官自己填分' : '每个等级固定分值';
+    }
+    $('#dfMode').onclick = function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button[data-mode]') : null;
+      if (!b) return;
+      var m = b.getAttribute('data-mode');
+      if (m === mode) return;
+      mode = m; dirty = true; vib(); drawMode(); refresh();
+    };
+    maxEl.oninput = function () {
+      maxEl.value = maxEl.value.replace(/[^0-9]/g, '');
+      touch();
+    };
+    drawMode();
 
     function drawRows() {
       rowsEl.innerHTML = '';
@@ -1538,22 +1703,42 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     }
 
     function drawPv() {
+      if (mode === 'free') {
+        var mx = Number(maxEl.value);
+        var show = (isFinite(mx) && mx >= 1 && mx <= 999) ? mx : '—';
+        $('#dfPv').innerHTML = '<div class="free-preview"><b>—</b><span>分</span>' +
+          '<em>面试官自己填 0 ~ ' + show + '</em></div>';
+        return;
+      }
       var used = rows.filter(function (r) { return r.label.trim() || String(r.score).trim(); });
-      $('#dfPv').innerHTML = used.length
+      $('#dfPv').innerHTML = '<div class="lv-preview">' + (used.length
         ? used.map(function (r) {
             var lab = r.label.trim() || '未命名';
             var sc = String(r.score).trim() === '' ? '—' : String(r.score);
             return '<span class="lv-pv"><em>' + esc(lab) + '</em><b>' + esc(sc) + ' 分</b></span>';
           }).join('')
-        : '<span class="lv-pv none"><em>还没填等级</em><b>—</b></span>';
+        : '<span class="lv-pv none"><em>还没填等级</em><b>—</b></span>') + '</div>';
     }
 
-    /* 校验：完全空白的等级行视为未使用，不计入也不报错 */
+    /* 校验：完全空白的等级行视为未使用，不计入也不报错；自由填分型只校验满分 */
     function check() {
       var n = name.trim();
       var errs = [];
-      var lvs = [];
       var rowBad = {};
+      var dup = (CFG.dimensions || []).some(function (x) { return x.id !== cfg.selfId && x.name === n; });
+      if (!n) errs.unshift('请填写打分项名称');
+      else if (dup) errs.unshift('「' + n + '」已经有了，换个名字');
+
+      if (mode === 'free') {
+        var raw = String(maxEl.value).trim();
+        var mn = Number(raw);
+        var okMax = raw !== '' && isFinite(mn) && mn >= 1 && mn <= 999;
+        if (!okMax) errs.push('满分要填 1~999');
+        return { name: n, mode: 'free', max: okMax ? Math.round(mn) : null,
+                 levels: [], errs: errs, rowBad: rowBad, dup: dup, ok: errs.length === 0 };
+      }
+
+      var lvs = [];
       rows.forEach(function (r, i) {
         var lab = r.label.trim();
         var rawS = String(r.score).trim();
@@ -1564,25 +1749,35 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
         if (!isFinite(sc) || sc < 0 || sc > 999) { rowBad[i] = 1; errs.push('第 ' + (i + 1) + ' 行分值要填 0~999'); return; }
         lvs.push({ key: r.key || '', label: lab, score: Math.round(sc) });
       });
-      var dup = (CFG.dimensions || []).some(function (x) { return x.id !== cfg.selfId && x.name === n; });
-      if (!n) errs.unshift('请填写打分项名称');
-      else if (dup) errs.unshift('「' + n + '」已经有了，换个名字');
       if (!lvs.length && !errs.length) errs.push('请至少填写一个等级（等级名 + 分值）');
-      return { name: n, levels: lvs, errs: errs, rowBad: rowBad, dup: dup, ok: errs.length === 0 };
+      return { name: n, mode: 'level', max: null, levels: lvs,
+               errs: errs, rowBad: rowBad, dup: dup, ok: errs.length === 0 };
+    }
+
+    /* 改了类型时提示历史分数会怎么处理 */
+    function modeWarn() {
+      if (!cfg.selfId || mode === origMode) return '';
+      return mode === 'free'
+        ? '注意：原来选的等级会按各自分值换算成自由分。'
+        : '注意：自由分没法换算成等级，这一项的历史分数会被清掉。';
     }
 
     function refresh() {
       var v = check();
       nameEl.classList.toggle('bad', (tried || !!name.trim()) && (!v.name || v.dup));
-      var rowEls = rowsEl.querySelectorAll('.lv-row');
-      for (var i = 0; i < rowEls.length; i++) {
-        rowEls[i].classList.toggle('bad', !!v.rowBad[i]);
+      if (mode === 'level') {
+        var rowEls = rowsEl.querySelectorAll('.lv-row');
+        for (var i = 0; i < rowEls.length; i++) rowEls[i].classList.toggle('bad', !!v.rowBad[i]);
+      } else {
+        maxEl.classList.toggle('bad', (tried || String(maxEl.value).trim() !== '') && !v.max);
       }
       $('#dfSave').disabled = !v.ok;
       var msg = $('#dfMsg');
       if (v.ok) {
         msg.className = 'form-msg ok';
-        msg.textContent = '填写完成，点下面「' + (cfg.saveText || '保存') + '」即可生效。';
+        msg.textContent = (mode === 'free'
+          ? '填写完成：面试官打分时自己填 0~' + v.max + ' 分。'
+          : '填写完成，点下面「' + (cfg.saveText || '保存') + '」即可生效。') + modeWarn();
       } else {
         msg.className = 'form-msg err';
         msg.textContent = v.errs[0] + (v.errs.length > 1 ? '（共 ' + v.errs.length + ' 处待完善）' : '');
@@ -1637,7 +1832,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       var btn = $('#dfSave');
       btn.disabled = true;
       btn.textContent = '保存中…';
-      cfg.onSave({ name: v.name, levels: v.levels }).then(function () {
+      cfg.onSave({ name: v.name, mode: v.mode, max: v.max, levels: v.levels }).then(function () {
         dirty = false;
         if (cfg.afterSave) cfg.afterSave(); else hideSheets();
       }).catch(function (e) {
@@ -1827,11 +2022,11 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       var cur = roundDims(id).map(function (d) { return d.id; });
       var rows = (CFG.dimensions || []).map(function (d) {
         var on = cur.indexOf(d.id) >= 0;
-        var lvTxt = d.levels.map(function (lv) { return lv.label + ' ' + lv.score; }).join(' / ');
         return '<button class="pick-row' + (on ? ' on' : '') + '" data-id="' + esc(d.id) + '">' +
           '<span class="pk-box">✓</span>' +
-          '<span class="pick-main"><span class="pick-name">' + esc(d.name) + '</span>' +
-          '<span class="pick-meta">' + esc(lvTxt) + '</span></span></button>';
+          '<span class="pick-main"><span class="pick-name">' + esc(d.name) +
+            (dimIsFree(d) ? '<span class="dim-mode">自由填分</span>' : '') + '</span>' +
+          '<span class="pick-meta">' + esc(dimBrief(d)) + '</span></span></button>';
       }).join('');
       if (!rows) rows = '<div class="empty">还没有打分项<br>点下面的「＋ 新建打分项」建一个</div>';
       var empty = !cur.length;
@@ -1882,7 +2077,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
           onCancel: function () { openRoundDims(id); },     // 取消就回到本轮配置
           afterSave: function () { openRoundDims(id); },    // 保存后回来，能看到新项已勾上
           onSave: function (p) {
-            return dimManage('add', { name: p.name, levels: p.levels }).then(function () {
+            return dimManage('add', { name: p.name, mode: p.mode, max: p.max, levels: p.levels }).then(function () {
               var created = (CFG.dimensions || []).filter(function (d) { return d.name === p.name; }).pop();
               if (!created) return null;
               var next = roundDims(id).map(function (d) { return d.id; });
