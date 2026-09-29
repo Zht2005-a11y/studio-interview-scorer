@@ -45,10 +45,11 @@ const SEED = {
   interviewers: ['张洪涛', '张加美', '田丹', '冉娟', '申宇轩', '黄红强', '付博',
                  '陈英开', '陈明峰', '骆丹', '马运福', '刘院明', '谌艳'],
 
-  // 轮次：多轮面试共用同一套小组与面试官配置，分数按轮分开统计
+  // 轮次：多轮面试共用同一套小组与面试官配置，分数按轮分开统计。
+  // dims = 本轮考察哪些打分项（显式列出，不做任何隐式包含）；空数组 = 还没配置
   rounds: [
-    { id: 'r1', name: '第1轮' },
-    { id: 'r2', name: '第2轮' }
+    { id: 'r1', name: '第1轮', dims: ['e', 'w'] },
+    { id: 'r2', name: '第2轮', dims: ['e', 'w'] }
   ],
 
   // 小组：每组配置自己的面试官（打分页进组后只列出本组的面试官）；
@@ -199,6 +200,23 @@ function normalize(cfg) {
   // dimensions 是唯一事实来源，旧字段不再保留
   delete cfg.expressLevels;
   delete cfg.willingLevels;
+
+  // 轮次考察范围：rounds[].dims = 打分项 id 白名单，**显式列出、不做任何隐式包含**。
+  // 空数组 = 该轮还没配置（此时这一轮打不了分，界面上会提示去配置）。
+  // 老数据没有该字段时，一次性落成"当前全部打分项"，保证行为不变；之后完全由用户显式维护。
+  const dimIdSet = Object.create(null);
+  cfg.dimensions.forEach(function (d) { dimIdSet[d.id] = 1; });
+  const allDimIds = cfg.dimensions.map(function (d) { return d.id; });
+  cfg.rounds.forEach(function (r) {
+    if (!Array.isArray(r.dims)) { r.dims = allDimIds.slice(); return; }
+    const seen = Object.create(null);
+    const list = [];
+    r.dims.forEach(function (id) {
+      const v = str(id);
+      if (v && dimIdSet[v] && !seen[v]) { seen[v] = 1; list.push(v); }
+    });
+    r.dims = list;   // 允许为空
+  });
   return cfg;
 }
 
@@ -269,12 +287,23 @@ function levelOf(levels, key) {
   return (levels || []).find(function (l) { return l.key === key; }) || null;
 }
 
-/* 一条打分记录 -> { items:[{name,label,score}], total }（打分项是动态的，按当前配置的打分项算） */
+/* 某一轮次实际考察的打分项（按全局顺序返回）。
+   rounds[].dims 是显式白名单；空数组表示这一轮还没配置。 */
+function dimsOfRound(roundId) {
+  const rd = findRound(roundId);
+  if (!rd || !Array.isArray(rd.dims)) return CONFIG.dimensions;   // 轮次已被删等兜底
+  const set = Object.create(null);
+  rd.dims.forEach(function (id) { set[id] = 1; });
+  return CONFIG.dimensions.filter(function (d) { return set[d.id]; });
+}
+
+/* 一条打分记录 -> { items:[{name,label,score}], total }
+   总分只累计「该记录所属轮次考察范围之内」的打分项 —— 本轮不考察的项不计入 */
 function detailOf(s) {
   const dm = s.dims || {};
   const items = [];
   let total = 0;
-  CONFIG.dimensions.forEach(function (d) {
+  dimsOfRound(s.r).forEach(function (d) {
     const lv = levelOf(d.levels, dm[d.id]);
     if (lv) { items.push({ name: d.name, label: lv.label, score: lv.score }); total += lv.score; }
   });
@@ -508,20 +537,24 @@ const server = http.createServer(function (req, res) {
         return json(res, 400, { error: '面试者不在名单中' });
       }
       // 校验各打分项等级：d.dims（新版）或 d.e / d.w（旧版页面兼容）
+      // 只接受「本轮考察范围之内」的打分项，范围外的直接丢弃（不报错，兼容旧页面与历史数据）
+      const scope = Object.create(null);
+      dimsOfRound(rd.id).forEach(function (x) { scope[x.id] = 1; });
       const dimsIn = {};
       const badDims = [];
       if (d.dims && typeof d.dims === 'object') {
         Object.keys(d.dims).forEach(function (k) {
           const dm = CONFIG.dimensions.find(function (x) { return x.id === k; });
           if (!dm || !levelOf(dm.levels, d.dims[k])) { badDims.push(k); return; }
-          dimsIn[k] = d.dims[k];
+          if (scope[k]) dimsIn[k] = d.dims[k];
         });
       }
       if (d.e !== undefined || d.w !== undefined) {
         [['e', d.e], ['w', d.w]].forEach(function (pair) {
           const dm = CONFIG.dimensions.find(function (x) { return x.id === pair[0]; });
-          if (pair[1] && (dm ? levelOf(dm.levels, pair[1]) : null)) dimsIn[pair[0]] = pair[1];
-          else if (pair[1]) badDims.push(pair[0]);
+          if (pair[1] && (dm ? levelOf(dm.levels, pair[1]) : null)) {
+            if (scope[pair[0]]) dimsIn[pair[0]] = pair[1];
+          } else if (pair[1]) badDims.push(pair[0]);
         });
       }
       if (badDims.length) return json(res, 400, { error: '打分项或等级无效' });
@@ -535,10 +568,14 @@ const server = http.createServer(function (req, res) {
         return json(res, 400, { error: '该面试者已由「' + (og ? og.name : '其他组') + '」评分，其他组不能再评' });
       }
 
-      /* 覆盖式更新：同一条记录里逐项合并（旧页面只发 e/w 时不会清掉其他打分项） */
+      /* 覆盖式更新：同一条记录里逐项合并（旧页面只发 e/w 时不会清掉其他打分项）
+         同时丢弃「已不在本轮考察范围内」的旧项，保持记录干净 */
       const old = inRound.find(function (s) { return s.g === d.g && s.c === d.c && s.i === d.i; });
       if (old) {
-        old.dims = Object.assign({}, old.dims || {}, dimsIn);
+        const merged = {};
+        Object.keys(old.dims || {}).forEach(function (k) { if (scope[k]) merged[k] = old.dims[k]; });
+        Object.keys(dimsIn).forEach(function (k) { merged[k] = dimsIn[k]; });
+        old.dims = merged;
       } else {
         scores.push({ r: rd.id, g: d.g, c: d.c, i: d.i, dims: dimsIn });
       }
@@ -589,7 +626,10 @@ const server = http.createServer(function (req, res) {
      小组（分场面试，只在组内记分）：{ kind:'gp', op:'add', name? }  不传 name 自动编号「第N组」
                                       { kind:'gp', op:'del', id }    删除该组所有轮次里的打分
      轮次（各轮共用同一套小组与面试官，分数按轮分开）：
-                        { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」
+                        { kind:'rd', op:'add', name? }   不传 name 自动编号「第N轮」（新建时 dims 为空，需自行配置）
+                        { kind:'rd', op:'dims', id, dims:[打分项id, ...] }
+                                                         显式配置本轮考察哪些打分项（自由增减，可为空）
+                                                         新建打分项不会自动进入任何轮次
                         { kind:'rd', op:'del', id }      删除该轮全部打分
      打分项（动态维度，每项若干等级 { label, score }）：
                         { kind:'dim', op:'add', name, levels:[{label,score}, ...] }
@@ -726,7 +766,23 @@ const server = http.createServer(function (req, res) {
           if (rounds.some(function (x) { return x.name === name; })) {
             return json(res, 400, { error: '已经有「' + name + '」了' });
           }
-          rounds.push({ id: 'r_' + crypto.randomBytes(3).toString('hex'), name: name });
+          // 新建轮次默认不考察任何打分项，由用户显式配置（避免"默认塞进来"）
+          rounds.push({ id: 'r_' + crypto.randomBytes(3).toString('hex'), name: name, dims: [] });
+        } else if (d.op === 'dims') {
+          /* 配置该轮考察哪些打分项：dims = 打分项 id 数组（显式、自由增减，允许为空 = 未配置） */
+          const id = str(d.id);
+          const r = rounds.find(function (x) { return x.id === id; });
+          if (!r) return json(res, 400, { error: '轮次不存在' });
+          const raw = Array.isArray(d.dims) ? d.dims : [];
+          const seen = Object.create(null);
+          const list = [];
+          raw.forEach(function (x) {
+            const v = str(x);
+            if (v && CONFIG.dimensions.some(function (dd) { return dd.id === v; }) && !seen[v]) {
+              seen[v] = 1; list.push(v);
+            }
+          });
+          r.dims = list;
         } else if (d.op === 'del') {
           if (rounds.length <= 1) return json(res, 400, { error: '至少保留一个轮次' });
           const id = str(d.id);
@@ -769,6 +825,16 @@ const server = http.createServer(function (req, res) {
           const id = str(d.id);
           const dim = dims.find(function (x) { return x.id === id; });
           if (!dim) return json(res, 400, { error: '打分项不存在' });
+          // 先全部校验通过，再落值（避免校验失败留下半截改动）
+          let newName = null;
+          if (d.name !== undefined && d.name !== null) {
+            newName = str(d.name);
+            if (!newName) return json(res, 400, { error: '打分项名称不能为空' });
+            if (newName.length > 10) return json(res, 400, { error: '名称太长了（最多 10 字）' });
+            if (dims.some(function (x) { return x.id !== id && x.name === newName; })) {
+              return json(res, 400, { error: '「' + newName + '」已经有了' });
+            }
+          }
           const rawLv = Array.isArray(d.levels) ? d.levels : [];
           const levels = [];
           const usedKeys = Object.create(null);
@@ -783,6 +849,7 @@ const server = http.createServer(function (req, res) {
           });
           if (!levels.length) return json(res, 400, { error: '至少保留一个等级' });
           if (levels.length > 6) return json(res, 400, { error: '等级太多了（最多 6 个）' });
+          if (newName) dim.name = newName;
           dim.levels = levels;
           // 等级改了分值，历史打分记录里的等级 key 不变，排名会按新分值即时重算
         } else if (d.op === 'del') {
@@ -794,11 +861,16 @@ const server = http.createServer(function (req, res) {
           // 级联：把该打分项从所有打分记录里移除
           scores.forEach(function (s) { if (s.dims && s.dims[id]) delete s.dims[id]; });
           writeJSON(SCORES_FILE, scores);
+          // 级联：从各轮次的考察范围里移除（移除后该轮为空就是「还没配置」，不会自动补回）
+          CONFIG.rounds.forEach(function (r) {
+            if (!Array.isArray(r.dims)) return;
+            r.dims = r.dims.filter(function (x) { return x !== id; });
+          });
         } else {
           return json(res, 400, { error: '操作错误' });
         }
         writeJSON(CONFIG_FILE, CONFIG);
-        return json(res, 200, { ok: true, dimensions: dims });
+        return json(res, 200, { ok: true, dimensions: dims, rounds: CONFIG.rounds });
       }
 
       return json(res, 400, { error: '类型错误' });
