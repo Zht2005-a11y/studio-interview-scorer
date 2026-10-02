@@ -8,20 +8,33 @@
 <title>面试打分</title>
 <style>
 :root{
-  --bg:#f5f7fb;
+  /* 色板 */
+  --bg:#f4f6fb;
   --card:#ffffff;
-  --ink:#101828;
-  --ink2:#667085;
+  --ink:#0f1729;
+  --ink2:#5b6478;
   --ink3:#98a2b3;
-  --line:#eef0f4;
+  --line:#e9edf4;
+  --line2:#dde3ee;
   --brand:#3d5bfd;
   --brand2:#6b5cff;
+  --brand-soft:#eef1ff;
   --bad:#f04438;
+  --bad-soft:#fef3f2;
   --warn:#f79009;
   --good:#12b76a;
-  --sh-sm:0 1px 2px rgba(16,24,40,.05);
-  --sh:0 6px 20px rgba(16,24,40,.07);
+  --good-soft:#eafaf1;
+  /* 圆角 */
+  --r-sm:11px;
   --r:18px;
+  --r-lg:22px;
+  /* 阴影 */
+  --sh-sm:0 1px 2px rgba(16,24,40,.04);
+  --sh:0 4px 16px rgba(16,24,40,.07);
+  --sh-lg:0 12px 32px rgba(16,24,40,.13);
+  /* 布局 */
+  --pad-x:16px;
+  --maxw:560px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%}
@@ -29,201 +42,334 @@ html,body{margin:0;padding:0;overscroll-behavior-y:none}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
   background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;
-  -webkit-font-smoothing:antialiased;font-feature-settings:"tnum";
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:"tnum";
 }
 button{font-family:inherit;font-size:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
-input{font-family:inherit}
+input,textarea{font-family:inherit}
+:focus-visible{outline:2.5px solid var(--brand);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
 
 /* ---------- 顶栏 ---------- */
 .appbar{
   position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
-  padding:calc(env(safe-area-inset-top) + 14px) 16px 12px;
-  background:rgba(245,247,251,.86);backdrop-filter:saturate(180%) blur(16px);
+  padding:calc(env(safe-area-inset-top) + 12px) var(--pad-x) 11px;
+  background:rgba(244,246,251,.84);backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-bottom:1px solid rgba(233,237,244,.85);
 }
 .appbar-l{flex:1;min-width:0}
-.appbar-title{font-size:19px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.appbar-sub{font-size:12.5px;color:var(--ink2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar-title{font-size:18.5px;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar-sub{font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .icon-btn{
-  flex:none;width:38px;height:38px;border-radius:12px;background:var(--card);
-  box-shadow:var(--sh-sm);display:flex;align-items:center;justify-content:center;color:var(--ink2);
-  transition:.15s;
+  flex:none;width:36px;height:36px;border-radius:11px;background:var(--card);
+  border:1px solid var(--line);box-shadow:var(--sh-sm);
+  display:flex;align-items:center;justify-content:center;color:var(--ink2);transition:.15s;
 }
-.icon-btn:active{transform:scale(.92)}
+.icon-btn:active{transform:scale(.92);background:#f7f9fc}
 .icon-btn svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
-main{padding:4px 14px 100px}
+main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
+
+/* 宽屏（电脑/平板预览）时居中收窄，避免卡片被拉得很长 */
+@media (min-width:640px){
+  .appbar{max-width:var(--maxw);margin:0 auto;border-radius:0 0 var(--r-lg) var(--r-lg);border-bottom-color:var(--line)}
+  main{max-width:var(--maxw);margin:0 auto}
+}
 
 /* ---------- 组列表 ---------- */
 .gcard{
   display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--card);
-  border-radius:var(--r);box-shadow:var(--sh-sm);padding:18px 16px;margin-bottom:11px;transition:.16s;
+  border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh-sm);padding:16px;margin-bottom:10px;transition:.16s;
 }
 .gcard:active{transform:scale(.985);box-shadow:var(--sh)}
 .gbadge{
-  flex:none;width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;font-size:19px;font-weight:800;
-  box-shadow:0 6px 16px rgba(74,108,247,.28);
+  flex:none;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;
+  background:var(--brand-soft);color:var(--brand);font-size:18px;font-weight:800;letter-spacing:-.5px;
 }
 .gmain{flex:1;min-width:0}
-.gname{display:block;font-size:17px;font-weight:700;letter-spacing:-.2px}
-.gmeta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px}
-.arrow{flex:none;color:#d0d5dd}
+.gname{display:block;font-size:16.5px;font-weight:700;letter-spacing:-.25px}
+.gmeta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px;line-height:1.45}
+.arrow{flex:none;color:#c9d0dd}
 .arrow svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 
 /* ---------- 主视觉卡 ---------- */
 .hero{
-  position:relative;overflow:hidden;border-radius:22px;padding:20px;margin-bottom:16px;
+  position:relative;overflow:hidden;border-radius:var(--r-lg);padding:20px;margin-bottom:14px;
   background:linear-gradient(135deg,#4a6cf7 0%,#6b5cff 100%);
-  box-shadow:0 10px 28px rgba(74,108,247,.28);color:#fff;
+  box-shadow:0 12px 30px rgba(74,108,247,.26);color:#fff;
 }
-.hero::after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;right:-62px;top:-78px;background:rgba(255,255,255,.13)}
+.hero::after{content:"";position:absolute;width:190px;height:190px;border-radius:50%;right:-66px;top:-84px;background:rgba(255,255,255,.12)}
+.hero::before{content:"";position:absolute;width:120px;height:120px;border-radius:50%;left:-46px;bottom:-72px;background:rgba(255,255,255,.07)}
 .hero-top{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-.hero-group{font-size:22px;font-weight:800;letter-spacing:-.3px}
-.hero-iv{font-size:13px;opacity:.9;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hero-group{font-size:21px;font-weight:800;letter-spacing:-.4px}
+.hero-iv{font-size:12.5px;opacity:.92;margin-top:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .hero-switch{
-  font-size:11.5px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.22);
-  color:#fff;font-weight:600;
+  font-size:11.5px;padding:4px 11px;border-radius:999px;background:rgba(255,255,255,.22);
+  color:#fff;font-weight:600;border:1px solid rgba(255,255,255,.28);transition:.16s;
 }
+.hero-switch:active{background:rgba(255,255,255,.34)}
 .hero-num{text-align:right;line-height:1;flex:none}
-.hero-num b{font-size:30px;font-weight:800;letter-spacing:-1px}
-.hero-num span{font-size:14px;opacity:.8;margin-left:1px}
-.hero-num em{display:block;font-size:11.5px;font-style:normal;opacity:.8;margin-top:5px}
-.hero-bar{position:relative;height:6px;border-radius:99px;background:rgba(255,255,255,.25);margin-top:16px;overflow:hidden}
+.hero-num b{font-size:31px;font-weight:800;letter-spacing:-1.2px}
+.hero-num span{font-size:14px;opacity:.78;margin-left:1px}
+.hero-num em{display:block;font-size:11.5px;font-style:normal;opacity:.82;margin-top:6px;letter-spacing:.3px}
+.hero-bar{position:relative;height:6px;border-radius:99px;background:rgba(255,255,255,.24);margin-top:16px;overflow:hidden}
 .hero-bar i{display:block;height:100%;border-radius:99px;background:#fff;transition:width .35s cubic-bezier(.22,.8,.28,1)}
 
 /* ---------- 通用 ---------- */
-.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh-sm);padding:16px;margin-bottom:14px}
-.card-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:12px;letter-spacing:.3px}
-.hint{color:var(--ink2);font-size:14px;line-height:1.75}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh-sm);padding:16px;margin-bottom:14px;
+}
+.card-title{font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:12px;letter-spacing:.4px}
+.hint{color:var(--ink2);font-size:13.5px;line-height:1.7}
 .hint.warn{color:#b54708}
-.empty{text-align:center;padding:30px 20px;color:var(--ink3);font-size:14px;line-height:1.9}
+.empty{text-align:center;padding:34px 20px;color:var(--ink3);font-size:14px;line-height:1.9}
 
 .chip-wrap{display:flex;flex-wrap:wrap;gap:9px}
 .chip{
-  padding:10px 18px;border-radius:999px;background:#f4f6fa;font-size:15.5px;font-weight:500;
-  border:1.5px solid transparent;transition:.16s;
+  padding:10px 18px;border-radius:999px;background:#f5f7fb;font-size:15px;font-weight:600;
+  color:var(--ink2);border:1.5px solid transparent;transition:.16s;
 }
-.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chip.on{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 4px 12px rgba(61,91,253,.28)}
 .chip:active{transform:scale(.96)}
-.add-chip{background:#e8f0fe;color:var(--brand);font-weight:600}
+.add-chip{background:var(--brand-soft);color:var(--brand);font-weight:600}
 
 /* ---------- 面试者列表 ---------- */
 .list{display:flex;flex-direction:column;gap:10px}
 .cand{
-  display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--card);
-  border-radius:16px;box-shadow:var(--sh-sm);padding:16px;transition:.16s;
+  position:relative;display:flex;align-items:center;gap:13px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--sh-sm);padding:15px 16px;transition:.16s;overflow:hidden;
 }
+.cand::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:transparent}
+.cand.done::before{background:var(--good)}
+.cand.lock::before{background:var(--line2)}
 .cand:active{transform:scale(.985);box-shadow:var(--sh)}
 .cand .idx{
-  flex:none;width:28px;height:28px;border-radius:9px;background:#f4f6fa;color:var(--ink3);
+  flex:none;width:30px;height:30px;border-radius:10px;background:#f5f7fb;color:var(--ink3);
   font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;
 }
-.cand.done .idx{background:#eafaf1;color:var(--good)}
-.cand.lock{opacity:.55}
+.cand.done .idx{background:var(--good-soft);color:var(--good)}
+.cand.lock{opacity:.6}
 .cand.lock:active{transform:none;box-shadow:var(--sh-sm)}
 .cand-main{flex:1;min-width:0}
 .cand-name{display:block;font-size:16.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cand-cmt{display:block;font-size:12px;color:var(--ink2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:#eef1ff;padding:5px 12px;border-radius:999px}
-.cand-tag.empty{color:var(--ink3);background:#f4f6fa;font-weight:500}
+.cand-tag{flex:none;font-size:13px;font-weight:700;color:var(--brand);background:var(--brand-soft);padding:5px 12px;border-radius:999px}
+.cand-tag.empty{color:var(--ink3);background:#f5f7fb;font-weight:500}
+.cand-tag.part{color:#b54708;background:#fff6e8;font-weight:600}
+.cand.part::before{background:var(--warn)}
+
+/* ---------- 打分页：轮次切换 + 本轮考察范围提示 ---------- */
+.rd-switch{
+  display:flex;gap:8px;overflow-x:auto;margin:0 0 10px;padding-bottom:2px;
+  -webkit-overflow-scrolling:touch;
+}
+.rd-switch::-webkit-scrollbar{display:none}
+.rd-chip{
+  flex:none;padding:7px 15px;border-radius:999px;background:var(--card);
+  border:1.5px solid var(--line);font-size:13.5px;font-weight:600;color:var(--ink2);transition:.16s;
+}
+.rd-chip.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 4px 12px rgba(61,91,253,.26)}
+.rd-chip:active{transform:scale(.96)}
+.scope-line{
+  display:flex;align-items:flex-start;gap:8px;margin:-4px 0 12px;padding:10px 13px;
+  background:var(--card);border:1px solid var(--line);border-radius:14px;
+}
+.scope-tag{
+  flex:none;font-size:11.5px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  padding:3px 9px;border-radius:999px;margin-top:1px;
+}
+.scope-txt{flex:1;min-width:0;font-size:12.5px;color:var(--ink2);line-height:1.6}
+.scope-cfg{
+  flex:none;font-size:12px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  padding:5px 11px;border-radius:999px;white-space:nowrap;transition:.16s;
+}
+.scope-cfg:active{transform:scale(.95);background:#e2e7ff}
+.scope-line.warn{background:#fffbf3;border-color:#f7e2b8}
+.scope-tag.warn{color:#b54708;background:#fdf0d9}
+
+/* ---------- 轮次：考察范围配置 ---------- */
+.rd-row{
+  display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:14px 15px;margin-bottom:10px;background:#f8fafd;
+  border:1px solid var(--line);border-radius:16px;transition:.16s;
+}
+.rd-row:last-child{margin-bottom:0}
+.rd-row:active{transform:scale(.99);background:#f1f4fa}
+.rd-row.warn{background:#fffbf3;border-color:#f7e2b8}
+.rd-row.warn .rd-meta{color:#b54708}
+.rd-main{flex:1;min-width:0}
+.rd-name{display:block;font-size:15.5px;font-weight:700;color:var(--ink)}
+.rd-meta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px;line-height:1.5}
+.rd-go{
+  flex:none;display:inline-flex;align-items:center;gap:2px;
+  font-size:12.5px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  padding:7px 12px;border-radius:999px;white-space:nowrap;
+}
+.rd-go.warn{color:#b54708;background:#fdf0d9}
+.pick-row{
+  display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+  padding:13px 14px;margin-bottom:9px;border-radius:14px;
+  background:#f8fafd;border:1.5px solid var(--line);transition:.16s;
+}
+.pick-row:active{transform:scale(.99)}
+.pick-row .pk-box{
+  flex:none;width:22px;height:22px;border-radius:7px;border:1.5px solid var(--line2);
+  background:#fff;color:transparent;font-size:13px;font-weight:800;line-height:1;
+  display:flex;align-items:center;justify-content:center;transition:.16s;
+}
+.pick-row.on{background:var(--brand-soft);border-color:var(--brand)}
+.pick-row.on .pk-box{background:var(--brand);border-color:var(--brand);color:#fff}
+.pick-main{flex:1;min-width:0}
+.pick-name{display:block;font-size:15.5px;font-weight:700;color:var(--ink)}
+.pick-meta{
+  display:block;font-size:12px;color:var(--ink3);margin-top:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 
 /* ---------- 评语 ---------- */
 .cm-box{
-  width:100%;min-height:72px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
-  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;
-  font-family:inherit;line-height:1.6;transition:.16s;
+  width:100%;min-height:76px;padding:13px 14px;border-radius:13px;border:1.5px solid var(--line);
+  background:#f8fafd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;
+  font-family:inherit;line-height:1.65;transition:.16s;
 }
-.cm-box:focus{border-color:var(--brand);background:#fff}
-.cm-meta{font-size:12px;color:var(--ink3);margin-top:6px}
+.cm-box:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.cm-box::placeholder{color:var(--ink3)}
+.cm-meta{font-size:12px;color:var(--ink3);margin-top:7px}
 .rank-comment{
-  margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--line);
-  font-size:12.5px;color:var(--ink2);line-height:1.6;
+  margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid var(--line);
+  font-size:12.5px;color:var(--ink2);line-height:1.65;
 }
 .rank-comment b{color:var(--ink);font-weight:600}
 
 /* ---------- 排名 ---------- */
 .rank-row{
-  display:flex;align-items:center;gap:13px;background:var(--card);border-radius:16px;
-  box-shadow:var(--sh-sm);padding:15px 16px;margin-bottom:10px;width:100%;text-align:left;transition:.16s;
+  position:relative;display:flex;align-items:center;gap:13px;background:var(--card);
+  border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-sm);
+  padding:15px 16px;margin-bottom:10px;width:100%;text-align:left;transition:.16s;
 }
-.rank-row:active{transform:scale(.99)}
+.rank-row:active{transform:scale(.99);box-shadow:var(--sh)}
 .medal{
-  flex:none;width:32px;height:32px;border-radius:11px;background:#f4f6fa;color:var(--ink3);
+  flex:none;width:33px;height:33px;border-radius:11px;background:#f5f7fb;color:var(--ink3);
   font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;
 }
-.medal.m1{background:linear-gradient(135deg,#ffd75e,#f7a928);color:#fff;box-shadow:0 4px 12px rgba(247,169,40,.35)}
+.medal.m1{background:linear-gradient(135deg,#ffd75e,#f7a928);color:#fff;box-shadow:0 4px 12px rgba(247,169,40,.34)}
 .medal.m2{background:linear-gradient(135deg,#dfe4ec,#aeb8c8);color:#fff}
 .medal.m3{background:linear-gradient(135deg,#f2b98f,#cd7a45);color:#fff}
 .rank-main{flex:1;min-width:0}
 .rank-name{font-size:16.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rank-sub{font-size:12px;color:var(--ink3);margin-top:3px}
 .rank-score{flex:none;text-align:right}
-.rank-score b{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
-.rank-score span{font-size:11px;color:var(--ink3);display:block}
+.rank-score b{font-size:23px;font-weight:800;color:var(--brand);letter-spacing:-.7px}
+.rank-score span{font-size:11px;color:var(--ink3);display:block;margin-top:1px}
 .rank-detail{
-  margin:-4px 0 12px;padding:13px 16px;background:#fafbfd;border:1px solid var(--line);
+  margin:-4px 0 12px;padding:13px 16px;background:#f8fafd;border:1px solid var(--line);
   border-radius:14px;font-size:13px;color:#475467;
 }
-.rank-detail .d-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
-.rank-detail .d-row b{color:var(--ink);flex:none}
+.rank-detail .d-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0}
+.rank-detail .d-row+.d-row{border-top:1px dashed var(--line)}
+.rank-detail .d-row b{color:var(--ink);flex:none;font-weight:700}
 
 /* ---------- 底部导航 ---------- */
 .nav{
-  position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;
-  background:rgba(255,255,255,.94);backdrop-filter:blur(16px);border-top:1px solid var(--line);
+  position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;justify-content:center;
+  background:rgba(255,255,255,.93);backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom);
 }
 .nav button{
-  flex:1;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:3px;
-  font-size:11px;font-weight:600;color:var(--ink3);transition:.16s;
+  position:relative;flex:1 1 0;max-width:190px;
+  padding:7px 0 9px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  font-size:11px;font-weight:600;color:var(--ink3);transition:color .16s;
+}
+.nav button::before{
+  content:"";position:absolute;top:5px;left:50%;margin-left:-21px;width:42px;height:26px;
+  border-radius:99px;background:transparent;transition:background .18s;
 }
 .nav button.on{color:var(--brand)}
-.nav svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav button.on::before{background:var(--brand-soft)}
+.nav button:active{transform:scale(.94)}
+.nav svg{
+  position:relative;width:22px;height:22px;stroke:currentColor;fill:none;
+  stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;
+}
 
 /* ---------- 弹层 ---------- */
-.mask{position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:40;backdrop-filter:blur(2px)}
+.mask{position:fixed;inset:0;background:rgba(16,24,40,.44);z-index:40;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .sheet{
   position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--card);
-  border-radius:24px 24px 0 0;max-height:92vh;overflow-y:auto;
+  border-radius:var(--r-lg) var(--r-lg) 0 0;max-height:92vh;overflow-y:auto;
   padding:8px 18px calc(22px + env(safe-area-inset-bottom));
-  transform:translateY(101%);transition:transform .28s cubic-bezier(.22,.8,.28,1);
-  box-shadow:0 -8px 40px rgba(16,24,40,.18);-webkit-overflow-scrolling:touch;
+  transform:translateY(101%);transition:transform .3s cubic-bezier(.22,.8,.28,1);
+  box-shadow:0 -10px 44px rgba(16,24,40,.2);-webkit-overflow-scrolling:touch;
 }
 .sheet.show{transform:translateY(0)}
 .sheet-grab{width:38px;height:4.5px;border-radius:99px;background:#e4e7ec;margin:6px auto 12px}
-.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.sheet-name{font-size:21px;font-weight:700;letter-spacing:-.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sheet-sub{font-size:12.5px;color:var(--ink3);margin-top:2px}
-.sheet-close{flex:none;font-size:13.5px;font-weight:600;color:var(--ink2);padding:7px 12px;border-radius:11px;background:#f4f6fa}
-.sheet-close:active{transform:scale(.95)}
-
-.grade-block{margin-top:20px}
-.grade-label{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px;letter-spacing:.2px}
-.grade-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
-.grade{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:16px 4px;
-  border-radius:15px;background:#f4f6fa;border:1.5px solid transparent;
-  font-size:15px;font-weight:600;color:var(--ink);transition:.16s;
+.sheet-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  padding-bottom:14px;border-bottom:1px solid var(--line);
 }
-.grade span{font-size:12px;font-weight:500;color:var(--ink3)}
+.sheet-name{font-size:20px;font-weight:700;letter-spacing:-.4px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-sub{font-size:12.5px;color:var(--ink3);margin-top:3px;line-height:1.5}
+.sheet-close{
+  flex:none;font-size:13.5px;font-weight:600;color:var(--ink2);
+  padding:8px 13px;border-radius:11px;background:#f5f7fb;border:1px solid var(--line);transition:.16s;
+}
+.sheet-close:active{transform:scale(.95);background:#eef1f6}
+
+/* 三段式弹窗：头部 + 中间滚动 + 底部常驻操作栏（软键盘弹起也点得到保存） */
+.sheet.stack{display:flex;flex-direction:column;overflow:hidden;padding-bottom:0}
+.sheet.stack>*{flex:none}
+.sheet.stack>.sheet-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:10px}
+.sheet-foot{
+  margin:0 -18px;padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  background:var(--card);border-top:1px solid var(--line);
+  box-shadow:0 -6px 22px rgba(16,24,40,.06);
+}
+@media (min-width:640px){
+  .sheet{max-width:var(--maxw);margin:0 auto;border-radius:var(--r-lg)}
+}
+
+/* ---------- 打分（核心控件） ---------- */
+.grade-block{margin-top:20px}
+.grade-block:first-of-type{margin-top:16px}
+.grade-label{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px;letter-spacing:.2px}
+.grade-row{display:grid;gap:9px;grid-template-columns:repeat(3,1fr)}
+.grade-row[data-n="1"]{grid-template-columns:1fr}
+.grade-row[data-n="2"]{grid-template-columns:1fr 1fr}
+.grade-row[data-n="4"]{grid-template-columns:1fr 1fr}
+.grade-row[data-n="5"],.grade-row[data-n="6"]{grid-template-columns:repeat(3,1fr)}
+.grade{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  min-height:66px;padding:14px 6px;border-radius:15px;
+  background:#f7f9fc;border:1.5px solid var(--line);
+  font-size:15.5px;font-weight:700;color:var(--ink);transition:.16s;
+}
+.grade span{font-size:12px;font-weight:600;color:var(--ink3);letter-spacing:.2px}
 .grade:active{transform:scale(.96)}
-.grade.on{color:#fff;border-color:transparent}
-.grade.on span{color:rgba(255,255,255,.88)}
-.grade[data-i="0"].on{background:linear-gradient(135deg,#fb7a6e,#f04438);box-shadow:0 6px 16px rgba(240,68,56,.28)}
-.grade[data-i="1"].on{background:linear-gradient(135deg,#fbbf5c,#f79009);box-shadow:0 6px 16px rgba(247,144,9,.28)}
-.grade[data-i="2"].on{background:linear-gradient(135deg,#3ecf8e,#12b76a);box-shadow:0 6px 16px rgba(18,183,106,.28)}
+.grade.on{
+  color:#fff;border-color:transparent;background:var(--g,var(--brand));
+  box-shadow:0 8px 18px rgba(16,24,40,.16);
+}
+.grade.on span{color:rgba(255,255,255,.9)}
 
 .total-line{
-  margin-top:20px;padding:14px 18px;border-radius:15px;background:#f4f6fb;
-  display:flex;align-items:center;justify-content:space-between;font-size:13.5px;color:var(--ink2);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  font-size:13px;color:var(--ink2);
 }
-.total-line b{font-size:23px;font-weight:800;color:var(--brand);letter-spacing:-.5px}
+.total-line b{font-size:22px;font-weight:800;color:var(--brand);letter-spacing:-.6px}
+.total-line.warn b{color:#b54708}
 .btn-primary{
-  width:100%;margin-top:14px;padding:16px;border-radius:15px;
+  width:100%;padding:16px;border-radius:15px;
   background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;font-size:16.5px;font-weight:700;
-  box-shadow:0 8px 20px rgba(74,108,247,.32);transition:.16s;
+  box-shadow:0 8px 20px rgba(74,108,247,.3);transition:.16s;
 }
-.btn-primary:disabled{background:#dfe3ec;box-shadow:none;color:#fff}
+.btn-primary:disabled{background:#e4e7ec;box-shadow:none;color:#98a2b3}
 .btn-primary:active{transform:scale(.985)}
 
 /* ---------- 管理 / 添加 ---------- */
@@ -231,77 +377,204 @@ main{padding:4px 14px 100px}
 .add-row{display:flex;gap:9px;margin-bottom:12px}
 .add-row input{
   flex:1;min-width:0;padding:13px 15px;border-radius:13px;border:1.5px solid var(--line);
-  background:#fafbfd;font-size:16px;color:var(--ink);outline:none;transition:.16s;
+  background:#f8fafd;font-size:16px;color:var(--ink);outline:none;transition:.16s;
 }
-.add-row input:focus{border-color:var(--brand);background:#fff}
+.add-row input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
 .add-row input::placeholder{color:var(--ink3)}
 .add-row button{
-  flex:none;padding:0 22px;border-radius:13px;background:var(--ink);color:#fff;
-  font-size:15px;font-weight:600;transition:.16s;
+  flex:none;padding:0 22px;border-radius:13px;
+  background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;
+  font-size:15px;font-weight:700;box-shadow:0 6px 16px rgba(74,108,247,.26);transition:.16s;
 }
 .add-row button:active{transform:scale(.95)}
 .tag{
   display:inline-flex;align-items:center;gap:7px;padding:8px 10px 8px 15px;border-radius:999px;
-  background:#f4f6fa;font-size:14.5px;font-weight:500;
+  background:#f5f7fb;border:1px solid var(--line);font-size:14.5px;font-weight:500;color:var(--ink2);
 }
 .tag i{
   width:20px;height:20px;border-radius:50%;background:#e4e7ec;color:var(--ink2);
-  font-style:normal;font-size:13px;line-height:20px;text-align:center;font-weight:700;
+  font-style:normal;font-size:13px;line-height:20px;text-align:center;font-weight:700;transition:.16s;
 }
-.tag i:active{background:#fda29b;color:#fff}
-.tag .i-ed{background:#e8f0fe;color:var(--brand)}
-.tag .i-ed:active{background:#c7d7fb}
+.tag i:active{background:var(--bad);color:#fff}
 
-/* ---------- 打分项等级编辑 ---------- */
+/* ---------- 打分项：列表卡片 ---------- */
+.dim-card{
+  display:flex;gap:12px;align-items:flex-start;padding:14px 15px;margin-bottom:10px;
+  background:#f8fafd;border:1px solid var(--line);border-radius:16px;
+}
+.dim-card:last-child{margin-bottom:0}
+.dim-main{flex:1;min-width:0}
+.dim-name{font-size:16.5px;font-weight:700;color:var(--ink);letter-spacing:-.25px}
+.dim-mode{
+  display:inline-block;margin-left:7px;vertical-align:1px;
+  font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-soft);
+  padding:2px 8px;border-radius:999px;letter-spacing:0;
+}
+.dim-meta{font-size:12.5px;color:var(--ink3);margin-top:3px}
+.dim-lvs{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.dim-lv{
+  display:inline-flex;align-items:baseline;gap:5px;padding:5px 11px;border-radius:999px;
+  background:var(--brand-soft);font-size:13px;font-weight:600;color:var(--ink2);
+}
+.dim-lv b{font-size:13px;font-weight:800;color:var(--brand)}
+.dim-acts{flex:none;display:flex;gap:8px}
+.dim-acts button{
+  width:40px;height:40px;border-radius:12px;background:var(--brand-soft);color:var(--brand);
+  font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.16s;
+}
+.dim-acts button.a-del{background:var(--bad-soft);color:var(--bad);font-size:20px}
+.dim-acts button:active{transform:scale(.92)}
+.btn-new{
+  width:100%;margin-top:14px;padding:16px;border-radius:15px;display:flex;align-items:center;
+  justify-content:center;gap:7px;background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;
+  font-size:16.5px;font-weight:700;box-shadow:0 8px 20px rgba(74,108,247,.3);transition:.16s;
+}
+.btn-new:active{transform:scale(.985)}
+.btn-new i{font-style:normal;font-size:20px;font-weight:600;line-height:1;margin-top:-1px}
+
+/* ---------- 打分项类型切换（选等级 / 自由填分） ---------- */
+.seg{display:flex;gap:4px;padding:4px;background:#f5f7fb;border:1px solid var(--line);border-radius:14px}
+.seg button{
+  flex:1;padding:12px 8px;border-radius:11px;font-size:14.5px;font-weight:600;
+  color:var(--ink2);transition:.16s;
+}
+.seg button.on{background:#fff;color:var(--brand);box-shadow:0 2px 8px rgba(16,24,40,.08)}
+.seg button:active{transform:scale(.97)}
+.free-preview{
+  display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:14px;
+  background:#f8fafd;border:1.5px dashed var(--line2);
+}
+.free-preview b{font-size:24px;font-weight:800;color:var(--brand);letter-spacing:-.6px}
+.free-preview span{font-size:13px;color:var(--ink3)}
+.free-preview em{font-style:normal;font-size:12.5px;color:var(--ink2);margin-left:auto}
+
+/* ---------- 打分面板：自由填分控件 ---------- */
+.grade-label em{
+  float:right;font-style:normal;font-weight:500;font-size:11.5px;color:var(--ink3);
+}
+.free-row{display:flex;align-items:center;gap:10px}
+.free-input{
+  flex:1;min-width:0;padding:16px 18px;border-radius:15px;
+  border:1.5px solid var(--line);background:#f8fafd;
+  font-size:23px;font-weight:800;color:var(--ink);letter-spacing:-.6px;
+  outline:none;text-align:center;transition:.16s;
+}
+.free-input::placeholder{font-size:15px;font-weight:500;letter-spacing:0;color:var(--ink3)}
+.free-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.free-input.bad{border-color:var(--bad);background:#fff8f7}
+.free-unit{flex:none;font-size:15px;font-weight:700;color:var(--ink3)}
+.free-hint{font-size:12px;color:var(--ink3);margin-top:8px;text-align:center}
+.free-hint.bad{color:#b54708;font-weight:600}
+
+/* ---------- 打分项表单弹窗（新建 / 编辑等级） ---------- */
+.sheet-foot.row{display:flex;gap:10px}
+.sheet-foot.row button{flex:1;padding:15px;border-radius:14px;font-size:16px;font-weight:700;transition:.16s}
+.sheet-foot .b-cancel{flex:0 0 33%;background:#f5f7fb;color:var(--ink2);border:1px solid var(--line)}
+.sheet-foot .b-save{background:linear-gradient(135deg,#4a6cf7,#6b5cff);color:#fff;box-shadow:0 8px 20px rgba(74,108,247,.3)}
+.sheet-foot .b-save:disabled{background:#e4e7ec;color:#98a2b3;box-shadow:none}
+.sheet-foot button:active{transform:scale(.98)}
+.sheet-foot .btn-primary{margin-top:10px}
+.sheet-foot .b-danger{background:linear-gradient(135deg,#f04438,#f97066);box-shadow:0 8px 20px rgba(240,68,56,.26)}
+
+/* ---------- 应用内二次确认（替代原生 confirm） ---------- */
+.confirm-body{padding:18px 2px 6px}
+.confirm-target{
+  font-size:17px;font-weight:700;color:var(--ink);line-height:1.5;margin-bottom:10px;
+  word-break:break-all;
+}
+.confirm-lines{font-size:13.5px;color:var(--ink2);line-height:1.8}
+.confirm-lines div{position:relative;padding-left:15px}
+.confirm-lines div::before{
+  content:"";position:absolute;left:3px;top:11px;width:5px;height:5px;
+  border-radius:50%;background:var(--ink3);
+}
+
+.f-label{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  font-size:13px;font-weight:700;color:var(--ink2);margin:18px 0 9px;letter-spacing:.2px;
+}
+.f-label em{font-style:normal;font-size:11.5px;font-weight:500;color:var(--ink3)}
+.f-input{
+  width:100%;padding:13px 15px;border-radius:13px;border:1.5px solid var(--line);
+  background:#f8fafd;font-size:16px;color:var(--ink);outline:none;transition:.16s;
+}
+.f-input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.f-input::placeholder{color:var(--ink3)}
+.f-input.bad{border-color:var(--bad);background:#fff8f7}
+.form-msg{
+  margin-top:14px;padding:11px 14px;border-radius:12px;background:#f5f7fb;
+  font-size:13px;color:var(--ink2);line-height:1.6;
+}
+.form-msg.ok{background:var(--good-soft);color:#05603a}
+.form-msg.err{background:var(--bad-soft);color:#b42318}
+
 .lv-row{display:flex;gap:8px;margin-bottom:9px;align-items:center}
 .lv-row input{
   flex:1;min-width:0;padding:11px 12px;border-radius:11px;border:1.5px solid var(--line);
-  background:#fafbfd;font-size:15px;color:var(--ink);outline:none;transition:.16s;
+  background:#f8fafd;font-size:15px;color:var(--ink);outline:none;transition:.16s;
 }
 .lv-row input:focus{border-color:var(--brand);background:#fff}
-.lv-row input.lv-score{flex:0 0 72px;text-align:center;font-weight:700}
+.lv-row input::placeholder{color:var(--ink3)}
+.lv-row input.lv-score{flex:0 0 74px;text-align:center;font-weight:700}
+.lv-row.bad input{border-color:var(--bad);background:#fff8f7}
 .lv-row .lv-del{
-  flex:none;width:34px;height:34px;border-radius:10px;background:#f4f6fa;color:var(--ink3);
-  font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  flex:none;width:34px;height:34px;border-radius:10px;background:#f5f7fb;color:var(--ink3);
+  font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.16s;
 }
-.lv-row .lv-del:active{background:#fde8e8;color:var(--bad)}
+.lv-row .lv-del:active{background:var(--bad-soft);color:var(--bad)}
+.lv-head{display:flex;gap:8px;padding:0 2px 7px;font-size:11.5px;font-weight:600;color:var(--ink3)}
+.lv-head .h-l{flex:1}
+.lv-head .h-s{flex:0 0 74px;text-align:center}
+.lv-head .h-d{flex:0 0 34px}
 .lv-add{
-  width:100%;margin-top:2px;padding:12px;border-radius:13px;background:#f4f6fa;
-  font-size:14.5px;font-weight:600;color:var(--ink2);
+  width:100%;margin-top:2px;padding:13px;border-radius:13px;
+  background:#f5f7fb;border:1px dashed var(--line2);
+  font-size:14.5px;font-weight:600;color:var(--ink2);transition:.16s;
 }
-.lv-add:active{transform:scale(.985)}
-.btn-row{display:flex;gap:9px;margin-top:14px}
-.btn-row button{flex:1;padding:13px;border-radius:13px;font-size:15px;font-weight:600;transition:.16s}
-.btn-row .b-cancel{background:#f4f6fa;color:var(--ink2)}
-.btn-row .b-save{background:var(--ink);color:#fff}
-.btn-row button:active{transform:scale(.98)}
+.lv-add:active{transform:scale(.985);background:#eef1f6}
+.lv-preview{display:flex;flex-wrap:wrap;gap:8px}
+.lv-pv{
+  display:flex;flex-direction:column;align-items:center;gap:2px;min-width:70px;
+  padding:10px 14px;border-radius:13px;background:#f8fafd;border:1.5px solid var(--line);
+}
+.lv-pv em{font-style:normal;font-size:14px;font-weight:600;color:var(--ink)}
+.lv-pv b{font-size:11.5px;font-weight:700;color:var(--brand)}
+.lv-pv.none em{color:var(--ink3);font-weight:500}
 
 /* ---------- 首页「面试者名单」入口 / 批量导入 ---------- */
-.gbadge.add{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 16px rgba(18,183,106,.28)}
+.gbadge.add{background:linear-gradient(135deg,#12b76a,#3ecf8e);box-shadow:0 6px 16px rgba(18,183,106,.26)}
 .gbadge.add svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .add-row input.c-cls{flex:0 0 32%}
 .batch-box textarea{
   width:100%;min-height:92px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
-  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
+  background:#f8fafd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;
+  font-family:inherit;line-height:1.8;transition:.16s;
 }
-.batch-box textarea:focus{border-color:var(--brand);background:#fff}
+.batch-box textarea:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.batch-box textarea::placeholder{color:var(--ink3)}
 .lv-text{
   width:100%;min-height:70px;margin-top:4px;padding:12px 14px;border-radius:13px;border:1.5px solid var(--line);
-  background:#fafbfd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;font-family:inherit;line-height:1.8;
+  background:#f8fafd;font-size:14.5px;color:var(--ink);outline:none;resize:vertical;
+  font-family:inherit;line-height:1.8;transition:.16s;
 }
-.lv-text:focus{border-color:var(--brand);background:#fff}
-.dim-list{margin-top:10px}
+.lv-text:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
 .btn-batch{
-  width:100%;margin-top:10px;padding:13px;border-radius:13px;background:var(--ink);color:#fff;
-  font-size:15px;font-weight:600;transition:.16s;
+  width:100%;margin-top:10px;padding:13px;border-radius:13px;
+  background:var(--brand-soft);color:var(--brand);
+  font-size:15px;font-weight:700;transition:.16s;
 }
-.btn-batch:active{transform:scale(.98)}
+.btn-batch:active{transform:scale(.98);background:#e2e7ff}
 .c-cls{font-style:normal;font-size:12.5px;color:var(--ink3);font-weight:500;margin-left:8px}
 
 .toast{
-  position:fixed;left:50%;bottom:calc(88px + env(safe-area-inset-bottom));transform:translateX(-50%);
-  background:rgba(16,24,40,.92);color:#fff;font-size:14px;padding:11px 22px;border-radius:999px;
-  z-index:90;max-width:82vw;text-align:center;box-shadow:0 8px 24px rgba(16,24,40,.25);
+  position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:rgba(15,23,41,.94);color:#fff;font-size:14px;padding:12px 22px;border-radius:999px;
+  z-index:90;max-width:82vw;text-align:center;box-shadow:var(--sh-lg);
+  animation:toastIn .22s cubic-bezier(.22,.8,.28,1);
+}
+@keyframes toastIn{
+  from{opacity:0;transform:translateX(-50%) translateY(8px)}
+  to{opacity:1;transform:translateX(-50%) translateY(0)}
 }
 [hidden]{display:none !important}
 </style>
@@ -339,6 +612,7 @@ main{padding:4px 14px 100px}
 <section class="sheet" id="sheet" hidden></section>
 <section class="sheet" id="asheet" hidden></section>
 <section class="sheet" id="dsheet" hidden></section>
+<section class="sheet" id="csheet" hidden></section>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -352,7 +626,6 @@ main{padding:4px 14px 100px}
   var CURROUND = null;    // 当前轮次（打分/排名共用；轮次只区分分数归属，组与面试官配置不变）
   var VIEW = 'score';     // score | rank | manage
   var MANAGE_SEC = null;  // 管理页当前子页：null(入口) | iv | dim | gp | rd
-  var DIM_DRAFT = [];     // 新增打分项的等级草稿（行内添加，未创建）
   var RANK_ROUND = null;  // 排名页当前轮次：null = 全部轮次总排名；轮次id = 该轮排名
   var RANK = null;       // 统一排名的行
   var LS_KEY = 'interview_me_v2';
@@ -390,16 +663,109 @@ main{padding:4px 14px 100px}
     for (var i = 0; i < CFG.dimensions.length; i++) if (CFG.dimensions[i].id === id) return CFG.dimensions[i];
     return null;
   }
-  function dimScore(id, key) {
+  /* 打分项两种类型：
+     - 选等级型（默认）：{ id, name, levels:[{key,label,score}] } —— 选一个等级，分值固定
+     - 自由填分型：      { id, name, mode:'free', max } —— 面试官自己填 0~max */
+  function dimIsFree(dm) { return !!dm && dm.mode === 'free'; }
+  function dimScore(id, val) {
     var dm = dimById(id);
     if (!dm) return 0;
-    for (var i = 0; i < dm.levels.length; i++) if (dm.levels[i].key === key) return dm.levels[i].score;
+    if (dimIsFree(dm)) { var n = Number(val); return isFinite(n) ? n : 0; }
+    for (var i = 0; i < dm.levels.length; i++) if (dm.levels[i].key === val) return dm.levels[i].score;
     return 0;
+  }
+  /* 这一项是否已作答（自由填分型 0 分也算作答，不能当成"没填"） */
+  function dimAnswered(dm, val) {
+    if (val === null || val === undefined || val === '') return false;
+    if (dimIsFree(dm)) {
+      var n = Number(val);
+      return isFinite(n) && n >= 0 && n <= (dm.max || 100);
+    }
+    return !!val;
   }
   function dimTotal(dims) {
     var t = 0;
     Object.keys(dims).forEach(function (k) { t += dimScore(k, dims[k]); });
     return t;
+  }
+
+  /* ================= 轮次的考察范围 =================
+     rounds[].dims = 打分项 id 白名单，**显式列出、不做任何隐式包含**。
+     空数组 = 这一轮还没配置（打不了分，界面上会提示去配置）。
+     新建打分项不会自动进入任何轮次，必须到「管理 → 轮次」里手动勾选。 */
+  function roundDims(roundId) {
+    var all = CFG.dimensions || [];
+    var rd = roundById(roundId);
+    if (!rd || !Array.isArray(rd.dims)) return all;   // 兜底：轮次已被删等
+    return all.filter(function (d) { return rd.dims.indexOf(d.id) >= 0; });
+  }
+  function curDims() {
+    var rd = curRound();
+    return roundDims(rd ? rd.id : null);
+  }
+  /* 某份打分记录在「某一轮」口径下的总分（本轮不考察的项不计入） */
+  function roundTotal(dims, roundId) {
+    var t = 0;
+    roundDims(roundId).forEach(function (d) {
+      if (dimAnswered(d, dims ? dims[d.id] : null)) t += dimScore(d.id, dims[d.id]);
+    });
+    return t;
+  }
+  /* 本轮是否已打完整（本轮考察的每一项都作答了） */
+  function isDone(cid) {
+    var s = MY[cid];
+    if (!s) return false;
+    var ds = curDims();
+    return ds.length > 0 && ds.every(function (d) { return dimAnswered(d, s[d.id]); });
+  }
+  /* 本轮还差几项没作答 */
+  function dimsMissing(dims) {
+    var n = 0;
+    curDims().forEach(function (d) { if (!dimAnswered(d, dims ? dims[d.id] : null)) n++; });
+    return n;
+  }
+  function dimsLabel(roundId) {
+    var ds = roundDims(roundId);
+    if (!ds.length) return '没有可考察的打分项';
+    return ds.map(function (d) { return d.name; }).join('、');
+  }
+  function dimsMax(roundId) {
+    var m = 0;
+    roundDims(roundId).forEach(function (d) {
+      if (dimIsFree(d)) { m += (d.max || 100); return; }
+      var mx = 0;
+      d.levels.forEach(function (lv) { if (lv.score > mx) mx = lv.score; });
+      m += mx;
+    });
+    return m;
+  }
+  /* 一项的简要描述（用于轮次勾选列表等） */
+  function dimBrief(d) {
+    if (dimIsFree(d)) return '自由填分 0~' + (d.max || 100);
+    return d.levels.map(function (lv) { return lv.label + ' ' + lv.score; }).join(' / ');
+  }
+  /* 某个打分项被哪些轮次考察（完全按各轮的显式列表算） */
+  function dimUsage(dimId) {
+    var rounds = CFG.rounds || [];
+    if (!rounds.length) return '暂无轮次';
+    var used = rounds.filter(function (r) {
+      return Array.isArray(r.dims) && r.dims.indexOf(dimId) >= 0;
+    });
+    if (!used.length) return '还没有任何轮次考察它';
+    if (used.length === rounds.length) return '全部轮次都考察';
+    return '用于 ' + used.map(function (r) { return r.name; }).join('、');
+  }
+  /* 各轮的考察范围是否不一致（不一致时跨轮总排名不可比） */
+  function roundsScopeDiffer() {
+    var rounds = CFG.rounds || [];
+    if (rounds.length < 2) return false;
+    var sig = function (id) { return roundDims(id).map(function (d) { return d.id; }).join(','); };
+    var first = sig(rounds[0].id);
+    return rounds.some(function (r) { return sig(r.id) !== first; });
+  }
+  /* 该轮是否还没配置考察的打分项 */
+  function roundUnconfigured(id) {
+    return roundDims(id).length === 0;
   }
   function tsStr(ts) {
     var d = new Date(ts);
@@ -459,6 +825,7 @@ main{padding:4px 14px 100px}
   }
 
   function render() {
+    if (!CFG) return;   // 配置还没加载完就点了底部导航，先忽略
     $('#navScore').className = VIEW === 'score' ? 'on' : '';
     $('#navRank').className = VIEW === 'rank' ? 'on' : '';
     $('#navManage').className = VIEW === 'manage' ? 'on' : '';
@@ -579,7 +946,7 @@ main{padding:4px 14px 100px}
     var usable = cands.filter(function (c) { return !lockedOf(c); });
     var total = usable.length;
     var done = 0;
-    usable.forEach(function (c) { if (MY[c.id] && Object.keys(MY[c.id]).length) done++; });
+    usable.forEach(function (c) { if (isDone(c.id)) done++; });
 
     var hero = el('div', 'hero');
     hero.innerHTML =
@@ -592,6 +959,37 @@ main{padding:4px 14px 100px}
       '<div class="hero-bar"><i style="width:' + (total ? done / total * 100 : 0) + '%"></i></div>';
     main.appendChild(hero);
 
+    /* 各轮考察范围不同，打分页直接给个轮次切换条 */
+    var rdList = CFG.rounds || [];
+    if (rdList.length > 1) {
+      var sw = el('div', 'rd-switch');
+      rdList.forEach(function (x) {
+        var b = el('button', 'rd-chip' + (rd && rd.id === x.id ? ' on' : ''), esc(x.name));
+        b.onclick = function () { switchRound(x.id); };
+        sw.appendChild(b);
+      });
+      main.appendChild(sw);
+    }
+
+    /* 本轮考察的打分项（完全由用户在「管理 → 轮次」里显式勾选） */
+    var cds = curDims();
+    var noScope = !cds.length;
+    var scopeLine = el('div', 'scope-line' + (noScope ? ' warn' : ''));
+    scopeLine.innerHTML = '<span class="scope-tag' + (noScope ? ' warn' : '') + '">' +
+        (rd ? esc(rd.name) : '本轮') + (noScope ? '未配置' : '考察') + '</span>' +
+      '<span class="scope-txt">' +
+        (noScope ? '这一轮还没勾选考察的打分项，暂时打不了分' : esc(cds.map(function (d) { return d.name; }).join(' · '))) +
+      '</span>' +
+      '<button class="scope-cfg" id="scopeCfg">' + (noScope ? '去配置' : '改范围') + '</button>';
+    main.appendChild(scopeLine);
+    $('#scopeCfg').onclick = function () {
+      vib();
+      if (!rd) return;
+      VIEW = 'manage'; MANAGE_SEC = 'rd';
+      render();
+      openRoundDims(rd.id);
+    };
+
     if (!cands.length) {
       main.appendChild(el('div', 'card empty',
         '还没有面试者名单<br><span style="font-size:13px">回到首页，点「面试者名单」添加或批量导入</span>'));
@@ -602,10 +1000,12 @@ main{padding:4px 14px 100px}
       var list = el('div', 'list');
       cands.forEach(function (c, i) {
         var s = MY[c.id];
-        var t = (s && Object.keys(s).length) ? dimTotal(s) : null;
+        var dn = isDone(c.id);
+        var partial = !dn && s && Object.keys(s).length;      // 本轮只填了一部分
+        var t = dn ? roundTotal(s, rd ? rd.id : null) : null;
         var lk = lockedOf(c);
         var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
-        var row = el('button', 'cand' + (lk ? ' lock' : (s ? ' done' : '')));
+        var row = el('button', 'cand' + (lk ? ' lock' : (dn ? ' done' : (partial ? ' part' : ''))));
         var cm = c.comment;
         row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
           '<span class="cand-main"><span class="cand-name">' + esc(c.name) +
@@ -613,8 +1013,9 @@ main{padding:4px 14px 100px}
           (cm ? '<span class="cand-cmt">评语：' + esc(cm.text.length > 14 ? cm.text.slice(0, 14) + '…' : cm.text) + ' · ' + esc(cm.by) + '</span>' : '') +
           '</span>' +
           (lk ? '<span class="cand-tag empty">' + esc(lkName) + '已评</span>'
-             : s ? '<span class="cand-tag">' + t + ' 分</span>'
-                : '<span class="cand-tag empty">未打分</span>');
+             : dn ? '<span class="cand-tag">' + t + ' 分</span>'
+                : partial ? '<span class="cand-tag part">还差 ' + dimsMissing(s) + ' 项</span>'
+                  : '<span class="cand-tag empty">未打分</span>');
         row.onclick = function () {
           if (lk) { toast('「' + c.name + '」已由' + lkName + '评分，本组不能再评'); return; }
           openSheet(c);
@@ -632,48 +1033,92 @@ main{padding:4px 14px 100px}
   }
 
   /* ================= 打分面板 ================= */
+  /* 等级按钮配色：低分偏暖（红）→ 高分偏冷（绿），按等级个数自适应取色。
+     旧版只有 data-i 0/1/2 三档背景，打分项超过 3 个等级时选中态会没有背景色（白字白底）。 */
+  var GRADE_RAMP = ['#e5484d', '#e8661d', '#c98a04', '#65a30d', '#16a34a', '#0f8a5f'];
+  function gradeColors(n) {
+    if (n <= 1) return [GRADE_RAMP[4]];
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(GRADE_RAMP[Math.round(i * (GRADE_RAMP.length - 1) / (n - 1))]);
+    return out;
+  }
+
   function gradeBlock(title, dim, levels, cur) {
-    var h = '<div class="grade-block"><div class="grade-label">' + esc(title) + '</div><div class="grade-row">';
+    var cols = gradeColors(levels.length);
+    var h = '<div class="grade-block"><div class="grade-label">' + esc(title) + '</div>' +
+            '<div class="grade-row" data-n="' + levels.length + '">';
     levels.forEach(function (lv, i) {
       h += '<button class="grade' + (cur === lv.key ? ' on' : '') + '" data-i="' + i +
-        '" data-dim="' + dim + '" data-key="' + esc(lv.key) + '">' + esc(lv.label) + '<span>' + lv.score + '</span></button>';
+        '" data-dim="' + dim + '" data-key="' + esc(lv.key) + '" style="--g:' + cols[i] + '">' +
+        esc(lv.label) + '<span>' + lv.score + '</span></button>';
     });
     return h + '</div></div>';
   }
 
+  /* 自由填分型：一个数字输入框，面试官自己填 0~max */
+  function freeBlock(dim, val) {
+    var v = (val === null || val === undefined) ? '' : String(val);
+    return '<div class="grade-block">' +
+      '<div class="grade-label">' + esc(dim.name) + '<em>0 ~ ' + dim.max + ' 分</em></div>' +
+      '<div class="free-row">' +
+        '<input class="free-input" id="free_' + esc(dim.id) + '" data-dim="' + esc(dim.id) + '"' +
+        ' inputmode="decimal" maxlength="6" placeholder="填分数" value="' + esc(v) + '">' +
+        '<span class="free-unit">分</span>' +
+      '</div>' +
+      '<div class="free-hint" id="freehint_' + esc(dim.id) + '">满分 ' + dim.max + ' 分，自己填</div>' +
+    '</div>';
+  }
+
   function openSheet(c) {
     var prev = MY[c.id] || {};
-    var pend = {};
-    CFG.dimensions.forEach(function (dm) { pend[dm.id] = prev[dm.id] || null; });
-    var origCm = c.comment ? c.comment.text : '';
     var rd = curRound();
+    /* 只渲染「本轮考察范围」里的打分项 —— 各轮范围可以不同 */
+    var ds = roundDims(rd ? rd.id : null);
+    var pend = {};
+    ds.forEach(function (dm) { pend[dm.id] = dimAnswered(dm, prev[dm.id]) ? prev[dm.id] : null; });
+    var origCm = c.comment ? c.comment.text : '';
 
     var blocks = '';
-    CFG.dimensions.forEach(function (dm) { blocks += gradeBlock(dm.name, dm.id, dm.levels, pend[dm.id]); });
+    ds.forEach(function (dm) {
+      blocks += dimIsFree(dm) ? freeBlock(dm, pend[dm.id])
+                              : gradeBlock(dm.name, dm.id, dm.levels, pend[dm.id]);
+    });
+    if (!ds.length) {
+      blocks = '<div class="card hint warn" style="margin-top:16px">' +
+        '这一轮还没勾选考察的打分项，打不了分。<br>' +
+        '点上面提示条里的「去配置」，或到「管理 → 轮次」里勾选。</div>';
+    }
 
     var sheet = $('#sheet');
+    /* 三段式：头部固定 + 中间滚动 + 底部常驻（合计 + 保存），手机上软键盘不会盖住保存按钮 */
+    sheet.className = 'sheet stack' + (sheet.classList.contains('show') ? ' show' : '');
     sheet.innerHTML = '<div class="sheet-grab"></div>' +
       '<div class="sheet-head"><div><div class="sheet-name">' + esc(c.name) + '</div>' +
-      '<div class="sheet-sub">' + (rd ? esc(rd.name) + ' · ' : '') + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) + '</div></div>' +
+      '<div class="sheet-sub">' + (rd ? esc(rd.name) + ' · ' : '') + (c.cls ? esc(c.cls) + ' · ' : '') + '打分人：' + esc(ME.interviewer) +
+      ' · 考察 ' + ds.length + ' 项</div></div>' +
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
-      blocks +
-      '<div class="grade-block"><div class="grade-label">评语</div>' +
-        '<textarea id="cmBox" class="cm-box" maxlength="200" placeholder="写下对这位面试者的评语（可以打分时写，打分后再来改）">' +
-        esc(origCm) + '</textarea>' +
-        (c.comment ? '<div class="cm-meta">当前评语由 ' + esc(c.comment.by) + ' 填写 · ' + tsStr(c.comment.ts) + '</div>' : '') +
+      '<div class="sheet-body">' +
+        blocks +
+        '<div class="grade-block"><div class="grade-label">评语</div>' +
+          '<textarea id="cmBox" class="cm-box" maxlength="200" placeholder="写下对这位面试者的评语（可以打分时写，打分后再来改）">' +
+          esc(origCm) + '</textarea>' +
+          (c.comment ? '<div class="cm-meta">当前评语由 ' + esc(c.comment.by) + ' 填写 · ' + tsStr(c.comment.ts) + '</div>' : '') +
+        '</div>' +
       '</div>' +
-      '<div class="total-line"><span>本次合计</span><b id="totalNum">—</b></div>' +
-      '<button class="btn-primary" id="saveBtn" disabled>保存</button>';
+      '<div class="sheet-foot">' +
+        '<div class="total-line"><span>本次合计</span><b id="totalNum">—</b></div>' +
+        '<button class="btn-primary" id="saveBtn" disabled>保存</button>' +
+      '</div>';
 
     showSheet('#sheet');
     var cmBox = $('#cmBox');
 
     function gradeOk() {
-      return CFG.dimensions.length > 0 && CFG.dimensions.every(function (dm) { return !!pend[dm.id]; });
+      return ds.length > 0 && ds.every(function (dm) { return dimAnswered(dm, pend[dm.id]); });
     }
     function gradeSum() {
       var sum = 0;
-      CFG.dimensions.forEach(function (dm) { if (pend[dm.id]) sum += dimScore(dm.id, pend[dm.id]); });
+      ds.forEach(function (dm) { if (dimAnswered(dm, pend[dm.id])) sum += dimScore(dm.id, pend[dm.id]); });
       return sum;
     }
 
@@ -682,6 +1127,20 @@ main{padding:4px 14px 100px}
       var cmOk = cmBox.value.trim() !== origCm;   // 评语有改动才允许「只存评语」
       $('#totalNum').textContent = ok ? (gradeSum() + ' 分') : '—';
       $('#saveBtn').disabled = !(ok || cmOk);
+      /* 自由填分越界时标红 */
+      ds.forEach(function (dm) {
+        if (!dimIsFree(dm)) return;
+        var inp = $('#free_' + dm.id);
+        if (!inp) return;
+        var raw = inp.value.trim();
+        var bad = raw !== '' && !dimAnswered(dm, raw);
+        inp.classList.toggle('bad', bad);
+        var hint = $('#freehint_' + dm.id);
+        if (hint) {
+          hint.className = 'free-hint' + (bad ? ' bad' : '');
+          hint.textContent = bad ? ('要填 0 ~ ' + dm.max + ' 之间的分数') : ('满分 ' + dm.max + ' 分，自己填');
+        }
+      });
     }
 
     sheet.querySelectorAll('.grade').forEach(function (btn) {
@@ -695,13 +1154,30 @@ main{padding:4px 14px 100px}
       };
     });
 
+    /* 自由填分：数字输入框 */
+    ds.forEach(function (dm) {
+      if (!dimIsFree(dm)) return;
+      var inp = $('#free_' + dm.id);
+      if (!inp) return;
+      inp.oninput = function () {
+        inp.value = inp.value.replace(/[^0-9.]/g, '');
+        pend[dm.id] = inp.value.trim() === '' ? null : Number(inp.value);
+        refresh();
+      };
+      inp.onfocus = function () {
+        setTimeout(function () {
+          try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+        }, 280);
+      };
+    });
+
     $('#sheetClose').onclick = hideSheets;
     $('#saveBtn').onclick = function () {
       $('#saveBtn').disabled = true;
       var cmText = cmBox.value.trim();
       var hasGrade = gradeOk();
       var dims = {};
-      CFG.dimensions.forEach(function (dm) { if (pend[dm.id]) dims[dm.id] = pend[dm.id]; });
+      ds.forEach(function (dm) { if (dimAnswered(dm, pend[dm.id])) dims[dm.id] = pend[dm.id]; });
       var jobs = [];
       if (cmText !== origCm) jobs.push(post('/api/comment', { c: c.id, text: cmText, by: ME.interviewer }));
       if (hasGrade) jobs.push(post('/api/score', { r: rd ? rd.id : '', g: CURGROUP, c: c.id, i: ME.interviewer, dims: dims }));
@@ -727,7 +1203,7 @@ main{padding:4px 14px 100px}
             for (var k = 1; k <= cands.length; k++) {
               var nx = cands[(idx + k) % cands.length];
               if (LOCK[nx.id] && LOCK[nx.id] !== CURGROUP) continue;
-              if (!MY[nx.id] || !Object.keys(MY[nx.id]).length) { openSheet(nx); return; }
+              if (!isDone(nx.id)) { openSheet(nx); return; }
             }
             toast('本组已全部打分完成');
           }, 300);
@@ -769,8 +1245,16 @@ main{padding:4px 14px 100px}
         var label = (c.cls ? c.cls + ' ' : '') + c.name;
         var t = el('span', 'tag', esc(label) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + label + '」从名单移除？\n所有组里他/她的打分记录也会一并删除。')) return;
-          cdManage('del', { id: c.id }).then(function () { paintCands(); });
+          askConfirm({
+            title: '从名单移除面试者',
+            name: label,
+            lines: ['所有组里他/她的打分记录也会一并删除，无法恢复。'],
+            okText: '移除',
+            danger: true
+          }).then(function (yes) {
+            if (!yes) return;
+            cdManage('del', { id: c.id }).then(function () { paintCands(); });
+          });
         };
         box.appendChild(t);
       });
@@ -857,6 +1341,15 @@ main{padding:4px 14px 100px}
     cw.appendChild(allB);
     rChips.appendChild(el('div', 'card-title', '看哪一轮的排名（分数按轮隔离统计）'));
     rChips.appendChild(cw);
+    if (RANK_ROUND) {
+      var sds = roundDims(RANK_ROUND);
+      rChips.appendChild(el('div', 'hint', '<span style="font-size:12.5px;color:#98a2b3">本轮考察 ' +
+        sds.length + ' 项：' + esc(sds.map(function (d) { return d.name; }).join('、')) +
+        '（满分 ' + dimsMax(RANK_ROUND) + ' 分）</span>'));
+    } else if (roundsScopeDiffer()) {
+      rChips.appendChild(el('div', 'hint warn', '<span style="font-size:12.5px">各轮考察的打分项不同，' +
+        '跨轮的总平均分不能直接比较，建议按单轮查看。</span>'));
+    }
     main.appendChild(rChips);
 
     if (!RANK.length) {
@@ -893,7 +1386,7 @@ main{padding:4px 14px 100px}
         : '';
       detail.innerHTML = cmHtml + r.detail.map(function (d) {
         var parts = (d.items || []).map(function (it) {
-          return esc(it.name) + ' ' + esc(it.label) + ' ' + it.score;
+          return esc(it.name) + (it.label ? ' ' + esc(it.label) : '') + ' ' + it.score;
         }).join(' + ');
         var who = esc(d.interviewer) + (d.round ? '（' + esc(d.round) + '）' : '');
         return '<div class="d-row"><span>' + who + (parts ? '　' + parts : '') + '</span><b>' + d.total + '</b></div>';
@@ -921,7 +1414,7 @@ main{padding:4px 14px 100px}
       { key: 'iv',  name: '面试官', meta: '全局名单共 ' + CFG.interviewers.length + ' 人 · 在「小组」里配置谁参与打分' },
       { key: 'dim', name: '打分项', meta: (CFG.dimensions || []).length + ' 项 · 等级名称 / 分值可编辑' },
       { key: 'gp',  name: '小组',   meta: (CFG.groups || []).length + ' 组 · 每组配置自己的面试官，删组清分数' },
-      { key: 'rd',  name: '轮次',   meta: (CFG.rounds || []).length + ' 轮 · 分数按轮隔离统计，删轮清分数' }
+      { key: 'rd',  name: '轮次',   meta: (CFG.rounds || []).length + ' 轮 · 每轮自由配置考察的打分项' }
     ];
     var list = el('div', 'list');
     defs.forEach(function (d) {
@@ -961,8 +1454,13 @@ main{padding:4px 14px 100px}
       CFG.interviewers.forEach(function (n) {
         var t = el('span', 'tag', esc(n) + '<i>×</i>');
         t.querySelector('i').onclick = function () {
-          if (!confirm('把「' + n + '」移除？\n他/她在所有小组里的配置和打分记录也会一并删除。')) return;
-          manage('iv', n, 'del');
+          askConfirm({
+            title: '移除面试官',
+            name: n,
+            lines: ['他/她在所有小组里的配置会一并移除。', '他/她打过的分也会被删除，无法恢复。'],
+            okText: '移除',
+            danger: true
+          }).then(function (yes) { if (yes) manage('iv', n, 'del'); });
         };
         box.appendChild(t);
       });
@@ -979,81 +1477,370 @@ main{padding:4px 14px 100px}
 
   /* --- 打分项 --- */
   function manageDim() {
-    var main = secHead('打分项', '每项若干等级，等级名称 / 分值可单独编辑');
-    var cDim = el('div', 'card');
-    cDim.innerHTML =
-      '<div class="card-title">打分项（点 ✎ 改等级名称/分值；点 × 删除，该项在所有打分里的分数一并移除）</div>' +
-      '<div class="add-row"><input id="dName" maxlength="10" placeholder="名称，如 项目经验"><button id="dLvAdd">＋ 添加等级</button></div>' +
-      '<div id="dLvRows"></div>' +
-      '<button class="lv-add" id="dAdd">添加打分项</button>' +
-      '<div class="chip-wrap dim-list" id="dList"></div>';
-    main.appendChild(cDim);
-    var dbox = $('#dList');
+    var main = secHead('打分项', '每个打分项若干等级，等级名与分值随时可改');
     var dims = CFG.dimensions || [];
+
+    var cList = el('div', 'card');
+    cList.innerHTML = '<div class="card-title">现有打分项 · 共 ' + dims.length + ' 项</div><div id="dList"></div>';
+    main.appendChild(cList);
+
+    var dbox = $('#dList');
     if (!dims.length) {
-      dbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有打分项</span>';
+      dbox.innerHTML = '<div class="empty">还没有打分项<br>点下面的「新建打分项」加一个</div>';
     } else {
-      dims.forEach(function (dm) {
-        var canDel = dims.length > 1;
-        var lvTxt = dm.levels.map(function (lv) { return esc(lv.label) + lv.score; }).join(' / ');
-        var t = el('span', 'tag', esc(dm.name) + '（' + lvTxt + '）' + '<i class="i-ed">✎</i>' + (canDel ? '<i>×</i>' : ''));
-        t.querySelector('.i-ed').onclick = function () {
-          vib();
-          openLevelEditor(dm.id);
-        };
-        if (canDel) t.querySelector('i:not(.i-ed)').onclick = function () {
-          if (!confirm('删除「' + dm.name + '」？\n它在所有打分记录里的分数会一并移除。')) return;
-          dimManage('del', { id: dm.id });
-        };
-        dbox.appendChild(t);
-      });
+      dims.forEach(function (dm) { dbox.appendChild(dimCard(dm, dims.length > 1)); });
     }
 
-    // 新增打分项的等级：点「＋ 添加等级」逐行添加，直接设置名称和分值
-    var dRows = $('#dLvRows');
-    function drawNewLvRows() {
-      dRows.innerHTML = '';
-      DIM_DRAFT.forEach(function (lv, i) {
-        var r = el('div', 'lv-row');
-        r.innerHTML = '<input class="lv-l" maxlength="10" value="' + esc(lv.label) + '">' +
-          '<input class="lv-score" maxlength="4" value="' + lv.score + '">' +
-          '<button class="lv-del">×</button>';
-        r.querySelector('.lv-l').oninput = function (e) { DIM_DRAFT[i].label = e.target.value; };
-        r.querySelector('.lv-score').oninput = function (e) { DIM_DRAFT[i].score = e.target.value; };
-        r.querySelector('.lv-del').onclick = function () { DIM_DRAFT.splice(i, 1); drawNewLvRows(); };
-        dRows.appendChild(r);
-      });
-      $('#dLvAdd').style.display = DIM_DRAFT.length >= 6 ? 'none' : '';
-    }
-    drawNewLvRows();
-    $('#dLvAdd').onclick = function () {
+    var add = el('button', 'btn-new', '<i>＋</i> 新建打分项');
+    add.onclick = function () { vib(); openDimCreator(); };
+    main.appendChild(add);
+
+    main.appendChild(el('div', 'hint',
+      '<span style="font-size:12.5px;color:#98a2b3">每项 1~6 个等级，分值 0~999。' +
+      '改动等级分值后，历史打分按新分值即时重算；删除某项会连带移除它在所有打分里的分数。<br>' +
+      '每张卡下面标了它被哪些轮次考察。新建的打分项<b>不会自动进入任何轮次</b>，' +
+      '要自己到「管理 → 轮次」里勾选。</span>'));
+  }
+
+  /* 单个打分项的卡片 */
+  function dimCard(dm, canDel) {
+    var free = dimIsFree(dm);
+    var scores = free ? [] : dm.levels.map(function (lv) { return lv.score; });
+    var range = free
+      ? '0 ~ ' + (dm.max || 100) + ' 分'
+      : (scores.length ? Math.min.apply(null, scores) + ' ~ ' + Math.max.apply(null, scores) + ' 分' : '没有等级');
+    var c = el('div', 'dim-card');
+    c.innerHTML =
+      '<div class="dim-main">' +
+        '<div class="dim-name">' + esc(dm.name) +
+          (free ? '<span class="dim-mode">自由填分</span>' : '') + '</div>' +
+        '<div class="dim-meta">' + (free ? '面试官自己填分 · ' : dm.levels.length + ' 个等级 · ') + range + '</div>' +
+        '<div class="dim-lvs">' + (free
+          ? '<span class="dim-lv">自由填分<b>0~' + (dm.max || 100) + '</b></span>'
+          : dm.levels.map(function (lv) {
+              return '<span class="dim-lv">' + esc(lv.label) + '<b>' + lv.score + '</b></span>';
+            }).join('')) + '</div>' +
+        '<div class="dim-use">' + esc(dimUsage(dm.id)) + '</div>' +
+      '</div>' +
+      '<div class="dim-acts">' +
+        '<button class="a-ed" title="编辑名称与等级">✎</button>' +
+        (canDel ? '<button class="a-del" title="删除该打分项">×</button>' : '') +
+      '</div>';
+    c.querySelector('.a-ed').onclick = function () { vib(); openLevelEditor(dm.id); };
+    if (canDel) c.querySelector('.a-del').onclick = function () {
       vib();
-      DIM_DRAFT.push({ label: '', score: 0 });
-      drawNewLvRows();
-      var last = dRows.lastElementChild;
+      askConfirm({
+        title: '删除打分项',
+        name: dm.name,
+        lines: ['它在所有打分记录里的分数会一并移除。',
+                '它会从各轮次的考察范围里移除。',
+                '此操作无法恢复。'],
+        okText: '删除',
+        danger: true
+      }).then(function (yes) { if (yes) dimManage('del', { id: dm.id }); });
+    };
+    return c;
+  }
+
+  /* 新建打分项：弹窗表单 */
+  function openDimCreator() {
+    openDimForm({
+      title: '新建打分项',
+      sub: '选一种打分方式：固定等级，或让面试官自由填分',
+      saveText: '保存打分项',
+      name: '',
+      mode: 'level',
+      max: 100,
+      rows: [
+        { key: '', label: '', score: '', ph: ['如 偏弱', '60'] },
+        { key: '', label: '', score: '', ph: ['如 良好', '75'] },
+        { key: '', label: '', score: '', ph: ['如 优秀', '90'] }
+      ],
+      onSave: function (p) {
+        return dimManage('add', { name: p.name, mode: p.mode, max: p.max, levels: p.levels });
+      }
+    });
+  }
+
+  /* 编辑已有打分项：改名称 / 类型 / 等级 */
+  function openLevelEditor(id) {
+    var ed = dimById(id);
+    if (!ed) return;
+    var free = dimIsFree(ed);
+    openDimForm({
+      title: '编辑打分项',
+      sub: free ? '改名称或满分；换成「选等级」会清掉该项历史分数'
+                : '改名称 / 等级后点保存，历史分数按新分值重算',
+      saveText: '保存修改',
+      name: ed.name,
+      selfId: id,
+      mode: free ? 'free' : 'level',
+      origMode: free ? 'free' : 'level',
+      max: ed.max || 100,
+      rows: free ? [] : ed.levels.map(function (l) { return { key: l.key, label: l.label, score: l.score }; }),
+      onSave: function (p) {
+        return dimManage('edit', { id: id, name: p.name, mode: p.mode, max: p.max, levels: p.levels });
+      }
+    });
+  }
+
+  /* 打分项表单弹窗：新建与编辑共用
+     cfg = { title, sub, saveText, name, rows:[{key,label,score,ph?}], selfId?, onSave(payload)->Promise } */
+  function openDimForm(cfg) {
+    var sheet = $('#dsheet');
+    /* 从「本轮考察的打分项」里就地新建时弹层已经开着：原地换内容，不重播入场动画。
+       用 hidden 判断而不是 show 类 —— show 类是在下一动画帧才加上的 */
+    var inPlace = !sheet.hidden;
+    if (inPlace) {
+      clearTimeout(sheet._hideT);
+      $('#mask').hidden = false;
+      sheet.className = 'sheet stack show';
+    } else {
+      hideSheets();
+      sheet.className = 'sheet stack';
+    }
+    sheet.innerHTML =
+      '<div class="sheet-grab"></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">' + esc(cfg.title) + '</div>' +
+      '<div class="sheet-sub">' + esc(cfg.sub) + '</div></div></div>' +
+      '<div class="sheet-body">' +
+        '<div class="f-label">打分项名称 <em id="dfNameCnt">0/10</em></div>' +
+        '<input class="f-input" id="dfName" maxlength="10" placeholder="如 项目经验">' +
+        '<div class="f-label">打分方式 <em id="dfModeHint"></em></div>' +
+        '<div class="seg" id="dfMode">' +
+          '<button type="button" data-mode="level">选等级 · 分值固定</button>' +
+          '<button type="button" data-mode="free">自由填分</button>' +
+        '</div>' +
+        '<div id="dfLevelBox">' +
+          '<div class="f-label">等级 <em>等级名 1~10 字，分值 0~999</em></div>' +
+          '<div class="lv-head"><span class="h-l">等级名称</span><span class="h-s">分值</span><span class="h-d"></span></div>' +
+          '<div id="dfRows"></div>' +
+          '<button class="lv-add" id="dfLvAdd">＋ 添加等级</button>' +
+        '</div>' +
+        '<div id="dfFreeBox" hidden>' +
+          '<div class="f-label">满分 <em>1~999</em></div>' +
+          '<input class="f-input" id="dfMax" inputmode="numeric" maxlength="3" placeholder="100">' +
+          '<div class="hint" style="margin-top:10px"><span style="font-size:12.5px;color:#98a2b3">' +
+          '这一项不设等级：打分时面试官自己填 0 ~ 满分之间的分数。</span></div>' +
+        '</div>' +
+        '<div class="f-label">预览 <em>打分页上会这样显示</em></div>' +
+        '<div id="dfPv"></div>' +
+        '<div class="form-msg" id="dfMsg"></div>' +
+      '</div>' +
+      '<div class="sheet-foot row">' +
+        '<button class="b-cancel" id="dfCancel">取消</button>' +
+        '<button class="b-save" id="dfSave">' + esc(cfg.saveText || '保存') + '</button>' +
+      '</div>';
+    if (!inPlace) showSheet('#dsheet');
+
+    var nameEl = $('#dfName');
+    var rowsEl = $('#dfRows');
+    var maxEl = $('#dfMax');
+    var name = String(cfg.name || '');
+    var mode = cfg.mode === 'free' ? 'free' : 'level';
+    var origMode = cfg.origMode === 'free' ? 'free' : 'level';
+    var rows = (cfg.rows || []).map(function (r) {
+      return {
+        key: r.key || '',
+        label: r.label == null ? '' : String(r.label),
+        score: (r.score === '' || r.score == null) ? '' : String(r.score),
+        ph: r.ph || null
+      };
+    });
+    if (!rows.length) rows.push({ key: '', label: '', score: '' });
+    var dirty = false;
+    var tried = false;
+    nameEl.value = name;
+    maxEl.value = String(cfg.max || 100);
+
+    /* 切换「选等级 / 自由填分」 */
+    function drawMode() {
+      sheet.querySelectorAll('#dfMode button').forEach(function (b) {
+        b.className = b.getAttribute('data-mode') === mode ? 'on' : '';
+      });
+      $('#dfLevelBox').hidden = (mode !== 'level');
+      $('#dfFreeBox').hidden = (mode !== 'free');
+      $('#dfModeHint').textContent = mode === 'free' ? '面试官自己填分' : '每个等级固定分值';
+    }
+    $('#dfMode').onclick = function (e) {
+      var b = e.target && e.target.closest ? e.target.closest('button[data-mode]') : null;
+      if (!b) return;
+      var m = b.getAttribute('data-mode');
+      if (m === mode) return;
+      mode = m; dirty = true; vib(); drawMode(); refresh();
+    };
+    maxEl.oninput = function () {
+      maxEl.value = maxEl.value.replace(/[^0-9]/g, '');
+      touch();
+    };
+    drawMode();
+
+    function drawRows() {
+      rowsEl.innerHTML = '';
+      rows.forEach(function (r, i) {
+        var ph = r.ph || ['等级名', '分值'];
+        var d = el('div', 'lv-row');
+        d.innerHTML =
+          '<input class="lv-l" maxlength="10" placeholder="' + esc(ph[0]) + '" value="' + esc(r.label) + '">' +
+          '<input class="lv-score" inputmode="numeric" maxlength="3" placeholder="' + esc(ph[1]) + '" value="' + esc(r.score) + '">' +
+          '<button class="lv-del" type="button">×</button>';
+        var li = d.querySelector('.lv-l'), si = d.querySelector('.lv-score');
+        li.oninput = function () { r.label = li.value; touch(); };
+        si.oninput = function () { r.score = si.value.replace(/[^0-9]/g, ''); si.value = r.score; touch(); };
+        var scroll = function () {
+          setTimeout(function () {
+            try { d.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+          }, 280);
+        };
+        li.onfocus = scroll; si.onfocus = scroll;
+        d.querySelector('.lv-del').onclick = function () {
+          if (rows.length <= 1) { toast('至少保留一个等级'); return; }
+          vib(); rows.splice(i, 1); dirty = true; drawRows(); refresh();
+        };
+        rowsEl.appendChild(d);
+      });
+      $('#dfLvAdd').style.display = rows.length >= 6 ? 'none' : '';
+    }
+
+    function drawPv() {
+      if (mode === 'free') {
+        var mx = Number(maxEl.value);
+        var show = (isFinite(mx) && mx >= 1 && mx <= 999) ? mx : '—';
+        $('#dfPv').innerHTML = '<div class="free-preview"><b>—</b><span>分</span>' +
+          '<em>面试官自己填 0 ~ ' + show + '</em></div>';
+        return;
+      }
+      var used = rows.filter(function (r) { return r.label.trim() || String(r.score).trim(); });
+      $('#dfPv').innerHTML = '<div class="lv-preview">' + (used.length
+        ? used.map(function (r) {
+            var lab = r.label.trim() || '未命名';
+            var sc = String(r.score).trim() === '' ? '—' : String(r.score);
+            return '<span class="lv-pv"><em>' + esc(lab) + '</em><b>' + esc(sc) + ' 分</b></span>';
+          }).join('')
+        : '<span class="lv-pv none"><em>还没填等级</em><b>—</b></span>') + '</div>';
+    }
+
+    /* 校验：完全空白的等级行视为未使用，不计入也不报错；自由填分型只校验满分 */
+    function check() {
+      var n = name.trim();
+      var errs = [];
+      var rowBad = {};
+      var dup = (CFG.dimensions || []).some(function (x) { return x.id !== cfg.selfId && x.name === n; });
+      if (!n) errs.unshift('请填写打分项名称');
+      else if (dup) errs.unshift('「' + n + '」已经有了，换个名字');
+
+      if (mode === 'free') {
+        var raw = String(maxEl.value).trim();
+        var mn = Number(raw);
+        var okMax = raw !== '' && isFinite(mn) && mn >= 1 && mn <= 999;
+        if (!okMax) errs.push('满分要填 1~999');
+        return { name: n, mode: 'free', max: okMax ? Math.round(mn) : null,
+                 levels: [], errs: errs, rowBad: rowBad, dup: dup, ok: errs.length === 0 };
+      }
+
+      var lvs = [];
+      rows.forEach(function (r, i) {
+        var lab = r.label.trim();
+        var rawS = String(r.score).trim();
+        if (!lab && !rawS) return;                       // 空行，忽略
+        var sc = rawS === '' ? NaN : Number(rawS);
+        if (!lab) { rowBad[i] = 1; errs.push('第 ' + (i + 1) + ' 行还差等级名称'); return; }
+        if (lab.length > 10) { rowBad[i] = 1; errs.push('第 ' + (i + 1) + ' 行等级名太长了'); return; }
+        if (!isFinite(sc) || sc < 0 || sc > 999) { rowBad[i] = 1; errs.push('第 ' + (i + 1) + ' 行分值要填 0~999'); return; }
+        lvs.push({ key: r.key || '', label: lab, score: Math.round(sc) });
+      });
+      if (!lvs.length && !errs.length) errs.push('请至少填写一个等级（等级名 + 分值）');
+      return { name: n, mode: 'level', max: null, levels: lvs,
+               errs: errs, rowBad: rowBad, dup: dup, ok: errs.length === 0 };
+    }
+
+    /* 改了类型时提示历史分数会怎么处理 */
+    function modeWarn() {
+      if (!cfg.selfId || mode === origMode) return '';
+      return mode === 'free'
+        ? '注意：原来选的等级会按各自分值换算成自由分。'
+        : '注意：自由分没法换算成等级，这一项的历史分数会被清掉。';
+    }
+
+    function refresh() {
+      var v = check();
+      nameEl.classList.toggle('bad', (tried || !!name.trim()) && (!v.name || v.dup));
+      if (mode === 'level') {
+        var rowEls = rowsEl.querySelectorAll('.lv-row');
+        for (var i = 0; i < rowEls.length; i++) rowEls[i].classList.toggle('bad', !!v.rowBad[i]);
+      } else {
+        maxEl.classList.toggle('bad', (tried || String(maxEl.value).trim() !== '') && !v.max);
+      }
+      $('#dfSave').disabled = !v.ok;
+      var msg = $('#dfMsg');
+      if (v.ok) {
+        msg.className = 'form-msg ok';
+        msg.textContent = (mode === 'free'
+          ? '填写完成：面试官打分时自己填 0~' + v.max + ' 分。'
+          : '填写完成，点下面「' + (cfg.saveText || '保存') + '」即可生效。') + modeWarn();
+      } else {
+        msg.className = 'form-msg err';
+        msg.textContent = v.errs[0] + (v.errs.length > 1 ? '（共 ' + v.errs.length + ' 处待完善）' : '');
+      }
+      drawPv();
+    }
+
+    function touch() { dirty = true; refresh(); }
+
+    drawRows();
+    refresh();
+
+    nameEl.oninput = function () {
+      name = nameEl.value;
+      $('#dfNameCnt').textContent = name.trim().length + '/10';
+      touch();
+    };
+    $('#dfNameCnt').textContent = name.trim().length + '/10';
+    nameEl.onkeydown = function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var first = rowsEl.querySelector('.lv-l');
+      if (first) first.focus();
+    };
+    $('#dfLvAdd').onclick = function () {
+      if (rows.length >= 6) { toast('最多 6 个等级'); return; }
+      vib(); rows.push({ key: '', label: '', score: '' }); dirty = true; drawRows(); refresh();
+      var last = rowsEl.lastElementChild;
       if (last) last.querySelector('.lv-l').focus();
     };
-    function addDim() {
-      var name = $('#dName').value.trim();
-      if (!name) { toast('请先输入打分项名称'); return; }
-      var lv = [];
-      for (var li = 0; li < DIM_DRAFT.length; li++) {
-        var lab = String(DIM_DRAFT[li].label).trim();
-        var sco = Number(DIM_DRAFT[li].score);
-        if (!lab || lab.length > 10 || !isFinite(sco) || sco < 0 || sco > 999) {
-          toast('请检查：等级名 1~10 字，分值 0~999');
-          return;
-        }
-        lv.push({ label: lab, score: Math.round(sco) });
-      }
-      if (!lv.length) { toast('请先点「＋ 添加等级」设置至少一个等级'); return; }
-      DIM_DRAFT = [];
-      dimManage('add', { name: name, levels: lv });
-    }
-    $('#dAdd').onclick = addDim;
-    $('#dName').onkeydown = function (e) { if (e.key === 'Enter') addDim(); };
 
-    /* 等级编辑器在弹窗里（见 openLevelEditor） */
+    /* 关掉表单：默认整层收起；从别的弹层切过来的，用 onCancel 回到上一层 */
+    function leave() {
+      if (cfg.onCancel) cfg.onCancel(); else hideSheets();
+    }
+    function tryClose() {
+      if (!dirty) { leave(); return; }
+      askConfirm({
+        title: '放弃未保存的修改？',
+        lines: ['刚填的内容不会保存。'],
+        okText: '放弃修改',
+        cancelText: '继续填写',
+        danger: true
+      }).then(function (yes) { if (yes) leave(); });
+    }
+    $('#dfCancel').onclick = tryClose;
+
+    $('#dfSave').onclick = function () {
+      tried = true;
+      var v = check();
+      if (!v.ok) { refresh(); toast(v.errs[0]); return; }
+      var btn = $('#dfSave');
+      btn.disabled = true;
+      btn.textContent = '保存中…';
+      cfg.onSave({ name: v.name, mode: v.mode, max: v.max, levels: v.levels }).then(function () {
+        dirty = false;
+        if (cfg.afterSave) cfg.afterSave(); else hideSheets();
+      }).catch(function (e) {
+        toast(e.message || '保存失败');
+        btn.disabled = false;
+        btn.textContent = cfg.saveText || '保存';
+      });
+    };
   }
 
   /* --- 小组（每组配置自己的面试官） --- */
@@ -1096,8 +1883,13 @@ main{padding:4px 14px 100px}
       var canDel = gps.length > 1;
       var t = el('span', 'tag', esc(gp.name) + (canDel ? '<i>×</i>' : ''));
       if (canDel) t.querySelector('i').onclick = function () {
-        if (!confirm('删除「' + gp.name + '」？\n该组所有轮次里的打分记录会一并移除。')) return;
-        gpManage('del', { id: gp.id });
+        askConfirm({
+          title: '删除小组',
+          name: gp.name,
+          lines: ['该组所有轮次里的打分记录会一并移除，无法恢复。'],
+          okText: '删除',
+          danger: true
+        }).then(function (yes) { if (yes) gpManage('del', { id: gp.id }); });
       };
       gbox.appendChild(t);
     });
@@ -1107,7 +1899,9 @@ main{padding:4px 14px 100px}
   function openGroupEditor(id) {
     var g = groupById(id);
     if (!g) return;
+    hideSheets();
     var sheet = $('#dsheet');
+    sheet.className = 'sheet';
     function paint() {
       g = groupById(id);
       var inG = Array.isArray(g.interviewers) ? g.interviewers : [];
@@ -1141,17 +1935,63 @@ main{padding:4px 14px 100px}
     showSheet('#dsheet');
   }
 
-  /* --- 轮次 --- */
+  /* --- 轮次（各轮共用小组与面试官，但每轮自由配置考察的打分项） --- */
   function manageRd() {
-    var main = secHead('轮次', '各轮共用同一套小组与面试官，分数按轮分开统计');
-    var cRd = el('div', 'card');
-    cRd.innerHTML =
-      '<div class="card-title">面试轮次（各轮共用同一套小组与面试官，分数按轮分开统计；点 × 删除该轮全部分数）</div>' +
-      '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮（留空自动编号）"><button id="mRdAdd">添加</button></div>' +
-      '<div class="chip-wrap" id="mRdList"></div>';
-    main.appendChild(cRd);
-    var rbox = $('#mRdList');
+    var main = secHead('轮次', '各轮共用小组与面试官，每轮自由配置考察的打分项');
     var rdList = CFG.rounds || [];
+
+    var cAdd = el('div', 'card');
+    cAdd.innerHTML =
+      '<div class="card-title">添加轮次（留空自动编号）</div>' +
+      '<div class="add-row"><input id="mRd" maxlength="10" placeholder="轮次名，如 第3轮"><button id="mRdAdd">添加</button></div>' +
+      '<div class="hint"><span style="font-size:12.5px;color:#98a2b3">' +
+      '新建的轮次不会自动带上任何打分项，添加后马上让你挑。</span></div>';
+    main.appendChild(cAdd);
+    function addRd() {
+      var inp = $('#mRd');
+      var name = inp.value.trim();
+      rdManage('add', { name: name }).then(function (j) {
+        inp.value = '';
+        var rs = (j && j.rounds) || [];
+        if (rs.length) openRoundDims(rs[rs.length - 1].id);   // 添加后直接引导配置
+      });
+    }
+    $('#mRdAdd').onclick = addRd;
+    $('#mRd').onkeydown = function (e) { if (e.key === 'Enter') addRd(); };
+
+    var cScope = el('div', 'card');
+    cScope.innerHTML = '<div class="card-title">每轮考察的打分项</div>' +
+      '<div class="hint" style="margin:-4px 0 12px"><span style="font-size:12.5px;color:#98a2b3">' +
+      '点下面任意一轮，自己勾选这一轮要考察的打分项（来源是「管理 → 打分项」里已有的项）。' +
+      '新加的打分项不会自动进任何轮次，要在这里手动勾上。</span></div>' +
+      '<div id="rdScopeList"></div>';
+    main.appendChild(cScope);
+    var sbox = $('#rdScopeList');
+    if (!rdList.length) {
+      sbox.innerHTML = '<div class="empty">还没有轮次</div>';
+    } else {
+      rdList.forEach(function (x) {
+        var ds = roundDims(x.id);
+        var unset = !ds.length;
+        var meta = unset
+          ? '还没配置考察的打分项 · 这一轮暂时打不了分'
+          : ds.length + ' 项：' + dimsLabel(x.id) + ' · 满分 ' + dimsMax(x.id) + ' 分';
+        var b = el('button', 'rd-row' + (unset ? ' warn' : ''));
+        b.innerHTML =
+          '<span class="rd-main"><span class="rd-name">' + esc(x.name) + '</span>' +
+          '<span class="rd-meta">' + esc(meta) + '</span></span>' +
+          '<span class="rd-go' + (unset ? ' warn' : '') + '">' + (unset ? '去配置 ›' : '配置打分项 ›') + '</span>';
+        b.onclick = function () { vib(); openRoundDims(x.id); };
+        sbox.appendChild(b);
+      });
+    }
+
+    var cDel = el('div', 'card');
+    cDel.innerHTML =
+      '<div class="card-title">删除轮次（点 × 删除，该轮所有分数一并移除）</div>' +
+      '<div class="chip-wrap" id="mRdList"></div>';
+    main.appendChild(cDel);
+    var rbox = $('#mRdList');
     if (!rdList.length) {
       rbox.innerHTML = '<span style="color:#98a2b3;font-size:13.5px">还没有轮次</span>';
     } else {
@@ -1159,19 +1999,112 @@ main{padding:4px 14px 100px}
         var canDel = rdList.length > 1;
         var t = el('span', 'tag', esc(rd.name) + (canDel ? '<i>×</i>' : ''));
         if (canDel) t.querySelector('i').onclick = function () {
-          if (!confirm('删除「' + rd.name + '」？\n该轮所有打分记录会一并删除。')) return;
-          rdManage('del', { id: rd.id });
+          askConfirm({
+            title: '删除轮次',
+            name: rd.name,
+            lines: ['该轮所有打分记录会一并删除，无法恢复。'],
+            okText: '删除',
+            danger: true
+          }).then(function (yes) { if (yes) rdManage('del', { id: rd.id }); });
         };
         rbox.appendChild(t);
       });
     }
-    function addRd() {
-      var inp = $('#mRd');
-      var v = inp.value.trim();
-      rdManage('add', { name: v });
+  }
+
+  /* 配置某一轮考察哪些打分项：从现有打分项里勾选，也可以就地新建一个并自动勾到本轮 */
+  function openRoundDims(id) {
+    var sheet = $('#dsheet');
+    var inPlace = !sheet.hidden;   // 从打分项表单切回来时别重播入场动画
+    function paint() {
+      var rd = roundById(id);
+      if (!rd) { hideSheets(); return; }
+      var cur = roundDims(id).map(function (d) { return d.id; });
+      var rows = (CFG.dimensions || []).map(function (d) {
+        var on = cur.indexOf(d.id) >= 0;
+        return '<button class="pick-row' + (on ? ' on' : '') + '" data-id="' + esc(d.id) + '">' +
+          '<span class="pk-box">✓</span>' +
+          '<span class="pick-main"><span class="pick-name">' + esc(d.name) +
+            (dimIsFree(d) ? '<span class="dim-mode">自由填分</span>' : '') + '</span>' +
+          '<span class="pick-meta">' + esc(dimBrief(d)) + '</span></span></button>';
+      }).join('');
+      if (!rows) rows = '<div class="empty">还没有打分项<br>点下面的「＋ 新建打分项」建一个</div>';
+      var empty = !cur.length;
+
+      sheet.className = 'sheet stack' + (sheet.classList.contains('show') ? ' show' : '');
+      sheet.innerHTML = '<div class="sheet-grab"></div>' +
+        '<div class="sheet-head"><div><div class="sheet-name">' + esc(rd.name) + ' · 考察的打分项</div>' +
+        '<div class="sheet-sub">自己勾选这一轮要考察的项，改完立即生效</div></div>' +
+        '<button class="sheet-close" id="rdClose">关闭</button></div>' +
+        '<div class="sheet-body">' + rows +
+          '<button class="lv-add" id="rdNewDim">＋ 新建打分项（建好自动勾到本轮）</button>' +
+          '<div class="hint" style="margin-top:10px"><span style="font-size:12.5px;color:#98a2b3">' +
+          '勾选完全由你决定：在别处新建的打分项不会自动进来，取消勾选后该项的分数也不再计入本轮的合计与排名' +
+          '（历史记录还在，重新勾上就恢复）。可以一个都不选，但那样这一轮打不了分。</span></div>' +
+        '</div>' +
+        '<div class="sheet-foot"><div class="total-line' + (empty ? ' warn' : '') + '">' +
+          (empty
+            ? '<span style="color:#b54708;font-weight:600">还没勾选任何打分项 · 这一轮打不了分</span><b>0 项</b>'
+            : '<span>本轮考察 ' + cur.length + ' 项 · 满分</span><b>' + dimsMax(id) + ' 分</b>') +
+        '</div></div>';
+
+      $('#rdClose').onclick = hideSheets;
+      sheet.querySelectorAll('.pick-row').forEach(function (b) {
+        b.onclick = function () {
+          var did = b.getAttribute('data-id');
+          var next = roundDims(id).map(function (d) { return d.id; });
+          var i = next.indexOf(did);
+          if (i >= 0) next.splice(i, 1);      // 自由取消，允许清空
+          else next.push(did);
+          vib();
+          rdSetDims(id, next).then(function () { if (!$('#dsheet').hidden) paint(); });
+        };
+      });
+
+      /* 就地新建：建好后自动勾到本轮（是在「配置本轮考察项」里主动建的，意图明确） */
+      $('#rdNewDim').onclick = function () {
+        vib();
+        openDimForm({
+          title: '新建打分项',
+          sub: '建好后会自动勾选到「' + rd.name + '」',
+          saveText: '保存并勾到本轮',
+          name: '',
+          rows: [
+            { key: '', label: '', score: '', ph: ['如 偏弱', '60'] },
+            { key: '', label: '', score: '', ph: ['如 良好', '75'] },
+            { key: '', label: '', score: '', ph: ['如 优秀', '90'] }
+          ],
+          onCancel: function () { openRoundDims(id); },     // 取消就回到本轮配置
+          afterSave: function () { openRoundDims(id); },    // 保存后回来，能看到新项已勾上
+          onSave: function (p) {
+            return dimManage('add', { name: p.name, mode: p.mode, max: p.max, levels: p.levels }).then(function () {
+              var created = (CFG.dimensions || []).filter(function (d) { return d.name === p.name; }).pop();
+              if (!created) return null;
+              var next = roundDims(id).map(function (d) { return d.id; });
+              if (next.indexOf(created.id) < 0) next.push(created.id);
+              return rdSetDims(id, next);
+            });
+          }
+        });
+      };
     }
-    $('#mRdAdd').onclick = addRd;
-    $('#mRd').onkeydown = function (e) { if (e.key === 'Enter') addRd(); };
+    if (inPlace) paint();
+    else { hideSheets(); paint(); showSheet('#dsheet'); }
+  }
+
+  /* 保存某一轮的考察范围（点一下即生效） */
+  function rdSetDims(id, dimIds) {
+    return post('/api/manage', { kind: 'rd', op: 'dims', id: id, dims: dimIds })
+      .then(function (j) {
+        CFG.rounds = j.rounds;
+        vib(18);
+        MY = {}; MYG = null;   // 本轮考察范围变了，重新拉自己的分数
+        if (VIEW === 'rank') renderRank();
+        else if (VIEW === 'manage') renderManage();
+        else render();
+        return j;
+      })
+      .catch(function (e) { toast(e.message); throw e; });
   }
 
   function manage(kind, name, op) {
@@ -1213,66 +2146,7 @@ main{padding:4px 14px 100px}
       .catch(function (e) { toast(e.message); throw e; });
   }
 
-  /* 打分项等级编辑器：弹窗展示（名称 / 分值逐行单独设置，历史分数按新分值重算） */
-  function openLevelEditor(id) {
-    var ed = (CFG.dimensions || []).find(function (x) { return x.id === id; });
-    if (!ed) return;
-    var sheet = $('#dsheet');
-    sheet.innerHTML = '<div class="sheet-grab"></div>' +
-      '<div class="sheet-head"><div><div class="sheet-name">编辑「' + esc(ed.name) + '」的等级</div>' +
-      '<div class="sheet-sub">等级名 / 分值可单独改，保存后历史分数按新分值重算</div></div>' +
-      '<button class="sheet-close" id="lvClose">关闭</button></div>' +
-      '<div id="lvRows" style="margin-top:16px"></div>' +
-      '<button class="lv-add" id="lvAdd">＋ 添加等级</button>' +
-      '<div class="hint" style="margin-top:10px"><span style="font-size:12.5px;color:#98a2b3">每个打分项 1~6 个等级，分值 0~999</span></div>' +
-      '<div class="btn-row"><button class="b-cancel" id="lvCancel">取消</button><button class="b-save" id="lvSave">保存</button></div>';
-
-    showSheet('#dsheet');
-    var rows = $('#lvRows');
-    var cur = ed.levels.map(function (l) { return { key: l.key, label: l.label, score: l.score }; });
-    function drawRows() {
-      rows.innerHTML = '';
-      cur.forEach(function (lv) {
-        var r = el('div', 'lv-row');
-        r.innerHTML = '<input class="lv-l" maxlength="10" value="' + esc(lv.label) + '">' +
-          '<input class="lv-score" maxlength="4" value="' + lv.score + '">' +
-          '<button class="lv-del">×</button>';
-        r.querySelector('.lv-del').onclick = function () {
-          cur.splice(cur.indexOf(lv), 1);
-          drawRows();
-        };
-        rows.appendChild(r);
-      });
-    }
-    drawRows();
-
-    $('#lvClose').onclick = hideSheets;
-    $('#lvAdd').onclick = function () {
-      if (cur.length >= 6) { toast('最多 6 个等级'); return; }
-      cur.push({ key: '', label: '', score: 0 });
-      drawRows();
-      var last = rows.lastElementChild;
-      if (last) last.querySelector('.lv-l').focus();
-    };
-    $('#lvCancel').onclick = function () { hideSheets(); };
-    $('#lvSave').onclick = function () {
-      var lv = [];
-      var rowEls = rows.querySelectorAll('.lv-row');
-      for (var ri = 0; ri < rowEls.length; ri++) {
-        var lab = rowEls[ri].querySelector('.lv-l').value.trim();
-        var sco = Number(rowEls[ri].querySelector('.lv-score').value);
-        if (!lab || lab.length > 10 || !isFinite(sco) || sco < 0 || sco > 999) {
-          toast('请检查：等级名 1~10 字，分值 0~999');
-          return;
-        }
-        lv.push({ key: cur[ri] ? cur[ri].key : '', label: lab, score: Math.round(sco) });
-      }
-      if (!lv.length) { toast('至少保留一个等级'); return; }
-      dimManage('edit', { id: ed.id, levels: lv }).then(function () {
-        hideSheets();
-      });
-    };
-  }
+  /* 打分项等级编辑器见上方 openDimForm（新建 / 编辑共用） */
 
   /* 轮次管理（各轮共用同一套小组与面试官，分数按轮分开） */
   function rdManage(op, payload) {
@@ -1298,6 +2172,7 @@ main{padding:4px 14px 100px}
     Object.keys(payload).forEach(function (k) { body[k] = payload[k]; });
     return post('/api/manage', body).then(function (j) {
       CFG.dimensions = j.dimensions;
+      if (j.rounds) CFG.rounds = j.rounds;   // 删打分项会级联影响各轮的考察范围
       vib(18);
       toast(op === 'add' ? '打分项已添加' : op === 'edit' ? '打分项已更新' : '打分项已删除');
       MY = {}; MYG = null;   // 重新拉自己的分，清掉已删项的残留 key
@@ -1312,23 +2187,75 @@ main{padding:4px 14px 100px}
     hideSheets(true);
     $('#mask').hidden = false;
     var s = $(sel);
+    clearTimeout(s._hideT);
     s.hidden = false;
     requestAnimationFrame(function () { s.classList.add('show'); });
   }
   function hideSheets(keepMask) {
-    ['#sheet', '#asheet', '#dsheet'].forEach(function (sel) {
+    ['#sheet', '#asheet', '#dsheet', '#csheet'].forEach(function (sel) {
       var s = $(sel);
+      clearTimeout(s._hideT);
       s.classList.remove('show');
-      if (!s.hidden) setTimeout(function () { s.hidden = true; s.innerHTML = ''; }, 280);
+      if (!s.hidden) s._hideT = setTimeout(function () { s.hidden = true; s.innerHTML = ''; s.className = 'sheet'; }, 280);
     });
     if (!keepMask) $('#mask').hidden = true;
   }
-  $('#mask').onclick = function () { hideSheets(); };
+  function anySheetOpen() {
+    return ['#sheet', '#asheet', '#dsheet'].some(function (sel) {
+      var s = $(sel);
+      return s && !s.hidden;
+    });
+  }
+
+  /* 应用内二次确认，返回 Promise<boolean>
+     不用原生 confirm：Chrome 在弹过几次后会给出「阻止此页面创建更多对话框」，
+     一旦被勾选，confirm() 会直接返回 false 且不显示对话框 —— 表现就是「点了没反应」。
+     cfg = { title, name?, lines?:[], okText?, cancelText?, danger? } */
+  function askConfirm(cfg) {
+    return new Promise(function (resolve) {
+      var sheet = $('#csheet');
+      var lines = (cfg.lines || []).map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('');
+      sheet.className = 'sheet stack';
+      sheet.innerHTML =
+        '<div class="sheet-grab"></div>' +
+        '<div class="sheet-head"><div><div class="sheet-name">' + esc(cfg.title || '请确认') + '</div></div></div>' +
+        '<div class="sheet-body"><div class="confirm-body">' +
+          (cfg.name ? '<div class="confirm-target">' + esc(cfg.name) + '</div>' : '') +
+          (lines ? '<div class="confirm-lines">' + lines + '</div>' : '') +
+        '</div></div>' +
+        '<div class="sheet-foot row">' +
+          '<button class="b-cancel" id="cfNo">' + esc(cfg.cancelText || '取消') + '</button>' +
+          '<button class="b-save' + (cfg.danger ? ' b-danger' : '') + '" id="cfYes">' + esc(cfg.okText || '确定') + '</button>' +
+        '</div>';
+      /* 只显示这一层，不关掉下面已经打开的弹窗（比如「新建打分项」表单） */
+      clearTimeout(sheet._hideT);
+      $('#mask').hidden = false;
+      sheet.hidden = false;
+      requestAnimationFrame(function () { sheet.classList.add('show'); });
+      var settled = false;
+      function done(v) {
+        if (settled) return;
+        settled = true;
+        sheet.classList.remove('show');
+        clearTimeout(sheet._hideT);
+        sheet._hideT = setTimeout(function () { sheet.hidden = true; sheet.innerHTML = ''; sheet.className = 'sheet'; }, 280);
+        if (!anySheetOpen()) $('#mask').hidden = true;
+        resolve(v);
+      }
+      $('#cfNo').onclick = function () { done(false); };
+      $('#cfYes').onclick = function () { done(true); };
+    });
+  }
+  $('#mask').onclick = function () {
+    var c = $('#csheet');
+    if (c && !c.hidden) { var no = $('#cfNo'); if (no) { no.click(); return; } }
+    hideSheets();
+  };
 
   /* ================= 交互 ================= */
   $('#navScore').onclick = function () { VIEW = 'score'; hideSheets(); render(); };
   $('#navRank').onclick = function () { VIEW = 'rank'; RANK_ROUND = CURROUND; hideSheets(); render(); };
-  $('#navManage').onclick = function () { VIEW = 'manage'; hideSheets(); render(); };
+  $('#navManage').onclick = function () { VIEW = 'manage'; MANAGE_SEC = null; hideSheets(); render(); };
   $('#backBtn').onclick = function () {
     hideSheets();
     if (VIEW === 'manage' && MANAGE_SEC) { MANAGE_SEC = null; renderManage(); return; }
