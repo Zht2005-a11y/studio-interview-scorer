@@ -593,10 +593,10 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 }
 .q-fld textarea{min-height:92px;resize:vertical;line-height:1.55}
 .q-fld textarea:focus,.q-fld input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
-.q-opt{display:flex;align-items:center;gap:9px;margin-bottom:8px}
-.q-opt input[type=checkbox]{flex:none;width:20px;height:20px;accent-color:var(--brand)}
-.q-opt input[type=text]{flex:1;min-width:0;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#f7f9fc;font-size:14.5px}
-.q-opt .q-del{flex:none;width:34px;height:34px;border-radius:11px;background:#f5f7fb;color:var(--ink3);font-size:18px;line-height:1}
+.q-opt{display:flex;align-items:flex-start;gap:9px;margin-bottom:8px}
+.q-opt input[type=checkbox]{flex:none;width:20px;height:20px;margin-top:12px;accent-color:var(--brand)}
+.q-opt textarea{flex:1;min-width:0;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#f7f9fc;font-size:14.5px;font-family:inherit;line-height:1.5;min-height:45px;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere}
+.q-opt .q-del{flex:none;width:34px;height:34px;margin-top:5px;border-radius:11px;background:#f5f7fb;color:var(--ink3);font-size:18px;line-height:1}
 .q-opt .q-del:active{background:#fee;color:var(--bad)}
 .q-hint{font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.55}
 
@@ -611,8 +611,8 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
 .ans-list{margin-top:10px;border-top:1px solid #d5efe4;padding-top:10px}
 .ans-row{margin-bottom:11px}
 .ans-row:last-child{margin-bottom:0}
-.ans-q{font-size:13px;line-height:1.55;color:var(--ink)}
-.ans-line{font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.5}
+.ans-q{font-size:13px;line-height:1.55;color:var(--ink);white-space:pre-wrap}
+.ans-line{font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.5;white-space:pre-wrap}
 .ans-line b{font-weight:700}
 .ans-line b.ok{color:var(--good)}
 .ans-line b.no{color:var(--bad)}
@@ -1738,11 +1738,14 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
             paint();                       // 单选：重绘以取消其他勾选
           }
         };
-        var txt = document.createElement('input');
-        txt.type = 'text';
+        var txt = document.createElement('textarea');
+        txt.rows = Math.max(1, String(o.text || '').split('\n').length);
         txt.value = o.text;
-        txt.placeholder = '选项 ' + String.fromCharCode(65 + i) + ' 的内容';
-        txt.oninput = function () { o.text = txt.value; };
+        txt.placeholder = '选项 ' + String.fromCharCode(65 + i) + ' 的内容（可换行）';
+        txt.oninput = function () {
+          o.text = txt.value;
+          txt.rows = Math.max(1, txt.value.split('\n').length);   // 跟随内容自动增高
+        };
         var del = el('button', 'q-del', '×');
         del.onclick = function () {
           if (model.options.length <= 2) { toast('选择题至少要有 2 个选项'); return; }
@@ -1806,7 +1809,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
         syncModel();
         model.options.push({ key: 'o' + model.options.length + '_' + Date.now().toString(36), text: '' });
         paint();
-        var ins = $('#qOpts').querySelectorAll('input[type=text]');
+        var ins = $('#qOpts').querySelectorAll('textarea');
         if (ins.length) ins[ins.length - 1].focus();
       };
     }
@@ -1814,7 +1817,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     function syncModel() {
       var t = $('#qTitle'); if (t) model.title = t.value;
       if (model.type === 'choice' && $('#qOpts')) {
-        var ins = $('#qOpts').querySelectorAll('input[type=text]');
+        var ins = $('#qOpts').querySelectorAll('textarea');
         for (var i = 0; i < ins.length; i++) { if (model.options[i]) model.options[i].text = ins[i].value; }
       }
     }
