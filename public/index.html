@@ -577,6 +577,53 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   to{opacity:1;transform:translateX(-50%) translateY(0)}
 }
 [hidden]{display:none !important}
+
+/* ---------- 题目管理 ---------- */
+.q-tag{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:999px;background:#f1f3f9;color:var(--ink2);margin-left:7px;vertical-align:middle}
+.q-tag.code{background:#fff4e5;color:#b26a00}
+.q-meta{display:block;font-size:12.5px;color:var(--ink3);margin-top:3px;line-height:1.45}
+.q-seg{display:flex;gap:6px;background:#f1f3f9;padding:4px;border-radius:13px}
+.q-seg button{flex:1;padding:9px;border-radius:10px;font-size:14px;font-weight:700;color:var(--ink2);transition:.16s}
+.q-seg button.on{background:#fff;color:var(--brand);box-shadow:var(--sh-sm)}
+.q-fld{margin-bottom:14px}
+.q-fld>label{display:block;font-size:12.5px;font-weight:700;color:var(--ink2);margin-bottom:7px}
+.q-fld textarea,.q-fld input[type=text],.q-fld input[type=number]{
+  width:100%;padding:12px 14px;border:1.5px solid var(--line);border-radius:13px;background:#f7f9fc;
+  font-size:15px;transition:.16s;
+}
+.q-fld textarea{min-height:92px;resize:vertical;line-height:1.55}
+.q-fld textarea:focus,.q-fld input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+.q-opt{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.q-opt input[type=checkbox]{flex:none;width:20px;height:20px;accent-color:var(--brand)}
+.q-opt input[type=text]{flex:1;min-width:0;padding:11px 13px;border:1.5px solid var(--line);border-radius:12px;background:#f7f9fc;font-size:14.5px}
+.q-opt .q-del{flex:none;width:34px;height:34px;border-radius:11px;background:#f5f7fb;color:var(--ink3);font-size:18px;line-height:1}
+.q-opt .q-del:active{background:#fee;color:var(--bad)}
+.q-hint{font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.55}
+
+/* ---------- 答题结果（打分弹窗 / 面试者列表） ---------- */
+.cand-ans{display:block;font-size:12px;font-weight:700;color:#0f6e56;margin-top:3px}
+.ans-box{background:#f5fbf8;border:1px solid #d5efe4;border-radius:14px;padding:12px 14px;margin-bottom:14px}
+.ans-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ans-title{font-size:13px;font-weight:700;color:#0f6e56}
+.ans-score{font-size:13px;color:var(--ink2);margin-left:auto}
+.ans-score b{font-size:16px;font-weight:800;color:#0f6e56}
+.ans-toggle{font-size:12.5px;font-weight:700;color:var(--brand);flex:none}
+.ans-list{margin-top:10px;border-top:1px solid #d5efe4;padding-top:10px}
+.ans-row{margin-bottom:11px}
+.ans-row:last-child{margin-bottom:0}
+.ans-q{font-size:13px;line-height:1.55;color:var(--ink)}
+.ans-line{font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.5}
+.ans-line b{font-weight:700}
+.ans-line b.ok{color:var(--good)}
+.ans-line b.no{color:var(--bad)}
+.ans-sec{font-size:11.5px;font-weight:700;color:#0f6e56;margin:12px 0 8px;letter-spacing:.3px}
+.ans-list .ans-sec:first-child,.ans-box .ans-sec:first-child{margin-top:2px}
+.ans-unit{font-size:12px;color:var(--ink3);margin-left:6px}
+.code-score{
+  width:66px;margin-left:8px;padding:6px 8px;border:1.5px solid var(--line);border-radius:9px;
+  background:#fff;font-size:14px;text-align:center;transition:.16s;
+}
+.code-score:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(61,91,253,.1);outline:none}
 </style>
 </head>
 <body>
@@ -628,6 +675,8 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   var MANAGE_SEC = null;  // 管理页当前子页：null(入口) | iv | dim | gp | rd
   var RANK_ROUND = null;  // 排名页当前轮次：null = 全部轮次总排名；轮次id = 该轮排名
   var RANK = null;       // 统一排名的行
+  var PAPER = null;      // 题库：{ questions:[...], need:{choice,code}, bank:{choice,code} }，null = 还没拉过
+  var ANS = null;        // 作答一览：面试者id -> { answered, choiceGot, codeGot, ... }
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
 
@@ -1006,10 +1055,12 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
         var lk = lockedOf(c);
         var lkName = lk ? (groupById(lk) || {}).name || '其他组' : '';
         var row = el('button', 'cand' + (lk ? ' lock' : (dn ? ' done' : (partial ? ' part' : ''))));
+        row.setAttribute('data-cid', c.id);
         var cm = c.comment;
         row.innerHTML = '<span class="idx">' + (i + 1) + '</span>' +
           '<span class="cand-main"><span class="cand-name">' + esc(c.name) +
           (c.cls ? '<em class="c-cls">' + esc(c.cls) + '</em>' : '') + '</span>' +
+          '<span class="cand-ans" hidden></span>' +
           (cm ? '<span class="cand-cmt">评语：' + esc(cm.text.length > 14 ? cm.text.slice(0, 14) + '…' : cm.text) + ' · ' + esc(cm.by) + '</span>' : '') +
           '</span>' +
           (lk ? '<span class="cand-tag empty">' + esc(lkName) + '已评</span>'
@@ -1025,11 +1076,134 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       main.appendChild(list);
     }
 
+    /* 本轮谁交过卷：异步拉一次，拉到后只更新卡片上的标记，不重绘整个列表 */
+    loadAnswerList(paintAnsTags);
+
     $('#switchIv').onclick = function () {
       ME = null; MY = {}; MYG = null;
       try { localStorage.removeItem(LS_KEY); } catch (e) {}
       render();
     };
+  }
+
+  /* ---------- 答题结果（选择题系统自动判分 + 编程题面试官人工填分） ---------- */
+  function loadAnswerList(cb) {
+    if (ANS) { if (cb) cb(); return; }
+    api('/api/answers').then(function (d) {
+      var map = {};
+      (d.list || []).forEach(function (x) { map[x.c] = x; });
+      ANS = map;
+      if (cb) cb();
+    }).catch(function () { ANS = {}; });
+  }
+
+  function paintAnsTags() {
+    if (!ANS) return;
+    var rows = document.querySelectorAll('.cand[data-cid]');
+    for (var i = 0; i < rows.length; i++) {
+      var a = ANS[rows[i].getAttribute('data-cid')];
+      var tag = rows[i].querySelector('.cand-ans');
+      if (!tag || !a || !a.answered) continue;
+      tag.textContent = '笔试 选择 ' + a.choiceGot + '/' + a.choiceFull +
+        (a.codeFull ? ' · 编程 ' + a.codeGot + '/' + a.codeFull : '');
+      tag.hidden = false;
+    }
+  }
+
+  /* 打分弹窗里的作答明细（异步加载；弹层可能已经被关掉，取不到元素就放弃） */
+  function loadAnswer(c) {
+    api('/api/answers?c=' + encodeURIComponent(c.id))
+      .then(function (d) {
+        var box = $('#ansBox');
+        if (!box) return;
+        if (!d.answered || !d.items.length) { box.hidden = true; return; }
+        box.hidden = false;
+        box.innerHTML = ansHtml(d);
+        bindAnsEvents(c, d);
+      })
+      .catch(function () {});
+  }
+
+  /* 把「选择题自动分 + 编程题人工分」的合计同步进「作答」打分项（面试官还能手改） */
+  function syncAnsDim(total) {
+    var inp = $('#free_ans');
+    if (!inp) return;
+    inp.value = String(total);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function bindAnsEvents(c, d) {
+    var tg = $('#ansToggle');
+    if (tg) tg.onclick = function () {
+      var list = $('#ansList');
+      if (!list) return;
+      list.hidden = !list.hidden;
+      tg.textContent = list.hidden ? '展开选择题明细' : '收起';
+    };
+
+    /* 编程题逐题填分：改完立刻存，并把合计同步到「作答」 */
+    document.querySelectorAll('.code-score[data-qid]').forEach(function (inp) {
+      inp.onchange = function () {
+        var qid = inp.getAttribute('data-qid');
+        var raw = inp.value.trim();
+        post('/api/codescore', { c: c.id, qid: qid, score: raw === '' ? null : Number(raw) })
+          .then(function (r) {
+            var dt = r.detail;
+            var t = $('#ansTotal'); if (t) t.textContent = dt.total;
+            var cs = $('#ansCodeSum'); if (cs) cs.textContent = dt.codeGot;
+            var hit = dt.items.filter(function (x) { return x.id === qid; })[0];
+            inp.value = (hit && hit.got !== null && hit.got !== undefined) ? hit.got : '';
+            syncAnsDim(dt.total);
+            toast('已记下，合计 ' + dt.total + ' 分');
+          })
+          .catch(function (e) { toast(e.message); });
+      };
+    });
+  }
+
+  function ansHtml(d) {
+    var choiceRows = '', codeRows = '', no = 0;
+
+    d.items.forEach(function (it) {
+      no++;
+      if (it.type === 'code') {
+        var v = (it.got === null || it.got === undefined) ? '' : it.got;
+        codeRows += '<div class="ans-row">' +
+          '<div class="ans-q">' + no + '. ' + esc(it.title) + '</div>' +
+          '<div class="ans-line">面试官打分：' +
+            '<input class="code-score" type="number" min="0" max="' + it.score + '" step="1" ' +
+            'data-qid="' + esc(it.id) + '" value="' + v + '" placeholder="0~' + it.score + '">' +
+            '<span class="ans-unit">/ ' + it.score + ' 分</span>' +
+          '</div>' +
+        '</div>';
+        return;
+      }
+      var txt = function (keys) {
+        if (!keys || !keys.length) return '（未作答）';
+        return keys.map(function (k) {
+          for (var j = 0; j < it.options.length; j++) {
+            if (it.options[j].key === k) return String.fromCharCode(65 + j) + '. ' + it.options[j].text;
+          }
+          return k;
+        }).join('　');
+      };
+      choiceRows += '<div class="ans-row">' +
+        '<div class="ans-q">' + no + '. ' + esc(it.title) + '</div>' +
+        '<div class="ans-line">面试者选：<b class="' + (it.ok ? 'ok' : 'no') + '">' + esc(txt(it.chosen)) + '</b></div>' +
+        '<div class="ans-line">正确答案：' + esc(txt(it.answer)) + '</div>' +
+      '</div>';
+    });
+
+    return '<div class="ans-head">' +
+        '<span class="ans-title">笔试作答</span>' +
+        '<span class="ans-score">选择 <b id="ansChoiceSum">' + d.choiceGot + '</b>/' + d.choiceFull +
+        ' + 编程 <b id="ansCodeSum">' + d.codeGot + '</b>/' + d.codeFull +
+        ' = <b id="ansTotal">' + d.total + '</b>/' + d.full + '</span>' +
+        (choiceRows ? '<button class="ans-toggle" id="ansToggle">展开选择题明细</button>' : '') +
+      '</div>' +
+      (codeRows ? '<div class="ans-sec">编程题（每题 0~10，填完自动计入「作答」分）</div>' + codeRows : '') +
+      (choiceRows ? '<div class="ans-list" id="ansList" hidden>' +
+        '<div class="ans-sec">选择题（系统自动判分）</div>' + choiceRows + '</div>' : '');
   }
 
   /* ================= 打分面板 ================= */
@@ -1098,6 +1272,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       ' · 考察 ' + ds.length + ' 项</div></div>' +
       '<button class="sheet-close" id="sheetClose">关闭</button></div>' +
       '<div class="sheet-body">' +
+        '<div class="ans-box" id="ansBox" hidden></div>' +
         blocks +
         '<div class="grade-block"><div class="grade-label">评语</div>' +
           '<textarea id="cmBox" class="cm-box" maxlength="200" placeholder="写下对这位面试者的评语（可以打分时写，打分后再来改）">' +
@@ -1111,6 +1286,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       '</div>';
 
     showSheet('#sheet');
+    loadAnswer(c);
     var cmBox = $('#cmBox');
 
     function gradeOk() {
@@ -1404,17 +1580,29 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     if (MANAGE_SEC === 'dim') return manageDim();
     if (MANAGE_SEC === 'gp') return manageGp();
     if (MANAGE_SEC === 'rd') return manageRd();
+    if (MANAGE_SEC === 'paper') return managePaper();
+
+    /* 题目数据是懒加载的：进管理页时先拉一次，好让「题目」入口能显示题数 */
+    if (PAPER === null) {
+      loadPaper(function () { if (VIEW === 'manage' && !MANAGE_SEC) renderManage(); });
+    }
 
     var main = $('#main'); main.innerHTML = '';
     $('#backBtn').hidden = true;
     $('#topTitle').textContent = '管理';
-    $('#topSub').textContent = '面试官 · 打分项 · 小组 · 轮次';
+    $('#topSub').textContent = '面试官 · 打分项 · 小组 · 轮次 · 题目';
 
+    var qMeta = '全局题库';
+    if (PAPER) {
+      var b0 = PAPER.bank || { choice: 0, code: 0 };
+      qMeta = '选择 ' + b0.choice + ' 道 · 编程 ' + b0.code + ' 道';
+    }
     var defs = [
       { key: 'iv',  name: '面试官', meta: '全局名单共 ' + CFG.interviewers.length + ' 人 · 在「小组」里配置谁参与打分' },
       { key: 'dim', name: '打分项', meta: (CFG.dimensions || []).length + ' 项 · 等级名称 / 分值可编辑' },
       { key: 'gp',  name: '小组',   meta: (CFG.groups || []).length + ' 组 · 每组配置自己的面试官，删组清分数' },
-      { key: 'rd',  name: '轮次',   meta: (CFG.rounds || []).length + ' 轮 · 每轮自由配置考察的打分项' }
+      { key: 'rd',  name: '轮次',   meta: (CFG.rounds || []).length + ' 轮 · 每轮自由配置考察的打分项' },
+      { key: 'paper', name: '题目', meta: qMeta + ' · 每人随机抽题，选择题自动判分' }
     ];
     var list = el('div', 'list');
     defs.forEach(function (d) {
@@ -1427,6 +1615,251 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       list.appendChild(card);
     });
     main.appendChild(list);
+  }
+
+  /* ================= 题库（全局一份，不分轮次） ================= */
+  function loadPaper(cb) {
+    var empty = { questions: [], need: { choice: 0, code: 0 }, bank: { choice: 0, code: 0 } };
+    return api('/api/questions').then(function (d) {
+      PAPER = d || empty;
+      if (cb) cb();
+    }).catch(function (e) {
+      PAPER = empty;
+      if (cb) cb();
+      toast('题库加载失败：' + e.message);
+    });
+  }
+
+  function managePaper() {
+    secHead('题目', '全局题库 · 每人随机抽题');
+    var main = $('#main'); main.innerHTML = '';
+
+    if (PAPER === null) {
+      main.appendChild(el('div', 'card empty', '加载中…'));
+      loadPaper(function () { managePaper(); });
+      return;
+    }
+
+    var need = PAPER.need || { choice: 3, code: 2 };
+    var bank = PAPER.bank || { choice: 0, code: 0 };
+    var qs = PAPER.questions || [];
+    var short = bank.choice < need.choice || bank.code < need.code;
+
+    var stat = el('div', 'card');
+    stat.innerHTML =
+      '<div style="font-size:13.5px;font-weight:700;color:' + (short ? '#b26a00' : '#0f6e56') + '">' +
+        '选择题 ' + bank.choice + ' / 需要 ' + need.choice +
+        '　·　编程题 ' + bank.code + ' / 需要 ' + need.code +
+        (short ? '　⚠ 题库还没备齐' : '　✓ 已备齐') +
+      '</div>' +
+      '<div class="q-hint">' +
+        '选择题每题 5 分（系统按正确答案自动判）、编程题每题 10 分（面试官人工填）。' +
+        '每位面试者进来答题时，系统会从题库里随机抽 ' + need.choice + ' 道选择题 + ' + need.code + ' 道编程题，抽到之后固定不变。' +
+      '</div>';
+    main.appendChild(stat);
+
+    var addCard = el('button', 'gcard');
+    addCard.innerHTML =
+      '<span class="gbadge">＋</span>' +
+      '<span class="gmain"><span class="gname">新建题目</span>' +
+      '<span class="gmeta">选择题（自动判分）· 编程题（面试官人工填分）</span></span>';
+    addCard.onclick = function () { vib(); openQuestionEditor(null); };
+    main.appendChild(addCard);
+
+    if (!qs.length) {
+      main.appendChild(el('div', 'card empty',
+        '题库还是空的<br><span style="font-size:13px">点上面的「新建题目」添加</span>'));
+      return;
+    }
+
+    var list = el('div', 'list');
+    qs.forEach(function (q, i) {
+      var row = el('button', 'gcard');
+      var shortTitle = q.title.length > 34 ? q.title.slice(0, 34) + '…' : q.title;
+      row.innerHTML =
+        '<span class="gbadge">' + (i + 1) + '</span>' +
+        '<span class="gmain"><span class="gname">' + esc(shortTitle) +
+        '<span class="q-tag' + (q.type === 'code' ? ' code' : '') + '">' +
+        (q.type === 'code' ? '编程题' : '选择题') + '</span></span>' +
+        '<span class="q-meta">' + q.score + ' 分' +
+        (q.type === 'code' ? ' · 面试者用 VS Code 写，面试官人工填分'
+          : ' · ' + q.options.length + ' 个选项' + (q.multi ? ' · 多选' : ' · 单选')) +
+        '</span></span>' +
+        '<span class="arrow"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></span>';
+      row.onclick = function () { vib(); openQuestionEditor(q); };
+      list.appendChild(row);
+    });
+    main.appendChild(list);
+  }
+
+  /* 题目编辑弹层：选择题（选项 + 正确答案 + 单选/多选）/ 编程题（只存题面） */
+  function openQuestionEditor(q) {
+    var isNew = !q;
+    var model = isNew
+      ? { type: 'choice', title: '', multi: false,
+          options: [{ key: 'o0', text: '' }, { key: 'o1', text: '' }], answer: [] }
+      : JSON.parse(JSON.stringify(q));
+    if (model.type !== 'code') {
+      if (!Array.isArray(model.options) || model.options.length < 2) {
+        model.options = [{ key: 'o0', text: '' }, { key: 'o1', text: '' }];
+      }
+      if (!Array.isArray(model.answer)) model.answer = [];
+    }
+
+    var sheet = $('#dsheet');
+    sheet.className = 'sheet stack';
+    sheet.innerHTML =
+      '<div class="sheet-grab"></div>' +
+      '<div class="sheet-head"><div><div class="sheet-name">' + (isNew ? '新建题目' : '编辑题目') + '</div>' +
+      '<div class="sheet-sub" id="qSub"></div></div>' +
+      '<button class="sheet-close" id="qClose">关闭</button></div>' +
+      '<div class="sheet-body" id="qBody"></div>' +
+      '<div class="sheet-foot row">' +
+        (isNew ? '' : '<button class="b-cancel" id="qDel">删除</button>') +
+        '<button class="b-save" id="qSave">保存</button>' +
+      '</div>';
+
+    function paintOpts() {
+      var box = $('#qOpts');
+      box.innerHTML = '';
+      model.options.forEach(function (o, i) {
+        var row = el('div', 'q-opt');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = model.answer.indexOf(o.key) >= 0;
+        cb.onchange = function () {
+          syncModel();                     // 重绘前先把当前输入同步进 model，否则题面会被清空
+          if (model.multi) {
+            var at = model.answer.indexOf(o.key);
+            if (cb.checked) { if (at < 0) model.answer.push(o.key); }
+            else if (at >= 0) model.answer.splice(at, 1);
+          } else {
+            model.answer = cb.checked ? [o.key] : [];
+            paint();                       // 单选：重绘以取消其他勾选
+          }
+        };
+        var txt = document.createElement('input');
+        txt.type = 'text';
+        txt.value = o.text;
+        txt.placeholder = '选项 ' + String.fromCharCode(65 + i) + ' 的内容';
+        txt.oninput = function () { o.text = txt.value; };
+        var del = el('button', 'q-del', '×');
+        del.onclick = function () {
+          if (model.options.length <= 2) { toast('选择题至少要有 2 个选项'); return; }
+          syncModel();
+          model.options.splice(i, 1);
+          model.answer = model.answer.filter(function (k) { return k !== o.key; });
+          paint();
+        };
+        row.appendChild(cb); row.appendChild(txt); row.appendChild(del);
+        box.appendChild(row);
+      });
+    }
+
+    function paint() {
+      var h = '<div class="q-seg" id="qSeg">' +
+        '<button data-t="choice" class="' + (model.type === 'choice' ? 'on' : '') + '">选择题</button>' +
+        '<button data-t="code" class="' + (model.type === 'code' ? 'on' : '') + '">编程题</button>' +
+        '</div>' +
+        '<div class="q-fld"><label>题面</label>' +
+        '<textarea id="qTitle" placeholder="输入题目内容">' + esc(model.title) + '</textarea></div>';
+
+      if (model.type === 'choice') {
+        h += '<div class="q-fld"><label>选项（勾上左边的方框 = 正确答案）</label><div id="qOpts"></div>' +
+          '<button class="btn-batch" id="qAddOpt">＋ 添加选项</button>' +
+          '<div class="q-hint">至少 2 个选项。多选题要把所有正确选项都勾上，面试者全部选对才得分。每题固定 5 分。</div></div>' +
+          '<div class="q-fld"><label>作答方式</label><div class="q-seg" id="qMultiSeg">' +
+          '<button data-m="0" class="' + (!model.multi ? 'on' : '') + '">单选</button>' +
+          '<button data-m="1" class="' + (model.multi ? 'on' : '') + '">多选</button>' +
+          '</div></div>';
+      } else {
+        h += '<div class="q-hint" style="margin-bottom:14px">' +
+          '编程题只在答题页展示题面，面试者用 VS Code 编写；每题固定 10 分，由面试官在打分时人工填。</div>';
+      }
+      $('#qBody').innerHTML = h;
+      $('#qSub').textContent = model.type === 'code'
+        ? '编程题 · 10 分 · 面试官人工填分'
+        : '选择题 · 5 分 · 系统自动判分';
+      if (model.type === 'choice') paintOpts();
+
+      $('#qSeg').onclick = function (e) {
+        var b = e.target.closest ? e.target.closest('button') : null;
+        if (!b) return;
+        syncModel();
+        model.type = b.getAttribute('data-t');
+        if (model.type === 'choice' && (!model.options || model.options.length < 2)) {
+          model.options = [{ key: 'o0', text: '' }, { key: 'o1', text: '' }];
+          model.answer = [];
+        }
+        paint();
+      };
+      var ms = $('#qMultiSeg');
+      if (ms) ms.onclick = function (e) {
+        var b = e.target.closest ? e.target.closest('button') : null;
+        if (!b) return;
+        model.multi = b.getAttribute('data-m') === '1';
+        if (!model.multi && model.answer.length > 1) model.answer = [model.answer[0]];
+        paint();
+      };
+      var ao = $('#qAddOpt');
+      if (ao) ao.onclick = function () {
+        syncModel();
+        model.options.push({ key: 'o' + model.options.length + '_' + Date.now().toString(36), text: '' });
+        paint();
+        var ins = $('#qOpts').querySelectorAll('input[type=text]');
+        if (ins.length) ins[ins.length - 1].focus();
+      };
+    }
+
+    function syncModel() {
+      var t = $('#qTitle'); if (t) model.title = t.value;
+      if (model.type === 'choice' && $('#qOpts')) {
+        var ins = $('#qOpts').querySelectorAll('input[type=text]');
+        for (var i = 0; i < ins.length; i++) { if (model.options[i]) model.options[i].text = ins[i].value; }
+      }
+    }
+
+    paint();
+    showSheet('#dsheet');
+
+    $('#qClose').onclick = hideSheets;
+
+    var delBtn = $('#qDel');
+    if (delBtn) delBtn.onclick = function () {
+      askConfirm({
+        title: '删除这道题？',
+        name: (model.title || '').slice(0, 24) || '（无题面）',
+        lines: ['已经从题库里抽到这道题的人，抽题记录里也会一并移除，不能恢复。'],
+        okText: '删除', danger: true
+      }).then(function (ok) {
+        if (!ok) return;
+        post('/api/manage', { kind: 'paper', op: 'del', id: model.id }).then(function () {
+          hideSheets(); toast('已删除');
+          loadPaper(function () { managePaper(); });
+        }).catch(function (e) { toast(e.message); });
+      });
+    };
+
+    $('#qSave').onclick = function () {
+      syncModel();
+      var payload = { type: model.type, title: String(model.title || '').trim() };
+      if (model.type === 'choice') {
+        payload.multi = !!model.multi;
+        payload.options = model.options.map(function (o) {
+          return { key: o.key, text: String(o.text || '').trim() };
+        });
+        payload.answer = model.answer.slice();
+      }
+      if (!payload.title) { toast('题面不能为空'); return; }
+
+      var body = { kind: 'paper', op: isNew ? 'add' : 'edit', q: payload };
+      if (!isNew) body.id = model.id;
+      var btn = $('#qSave'); btn.disabled = true;
+      post('/api/manage', body).then(function () {
+        hideSheets(); toast(isNew ? '已添加' : '已保存');
+        loadPaper(function () { managePaper(); });
+      }).catch(function (e) { btn.disabled = false; toast(e.message); });
+    };
   }
 
   function secHead(title, sub) {

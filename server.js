@@ -82,6 +82,8 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const SCORES_FILE = path.join(DATA_DIR, 'scores.json');
+const PAPER_FILE = path.join(DATA_DIR, 'paper.json');        // 题目（按轮次分）
+const ANSWERS_FILE = path.join(DATA_DIR, 'answers.json');    // 面试者的作答记录
 
 function uid() { return 'c_' + crypto.randomBytes(4).toString('hex'); }
 function str(v) { return typeof v === 'string' ? v.trim() : ''; }
@@ -283,6 +285,209 @@ if (!Array.isArray(scores)) scores = [];
   if (changed) writeJSON(SCORES_FILE, scores);
 })();
 
+/* ---------- 题库：**全局一份**，不分轮次 ----------
+   两种题型，分值写死：
+     choice（选择题）：{ id, type:'choice', title, score:5, multi, options:[{key,text}], answer:[key] }
+     code（编程题）  ：{ id, type:'code',   title, score:10 }
+   编程题在本系统里**只展示题面、不作答**（面试者用 VS Code 写），
+   分数由面试官在打分时逐题人工填（0~10）。 */
+const CHOICE_SCORE = 5;                // 每道选择题固定 5 分
+const CODE_SCORE = 10;                 // 每道编程题固定 10 分
+const DRAW = { choice: 3, code: 2 };   // 每人随机抽 3 道选择题 + 2 道编程题
+
+function normQuestion(q) {
+  if (!q || typeof q !== 'object') return null;
+  const title = str(q.title);
+  if (!title) return null;
+  const id = str(q.id) || ('q_' + crypto.randomBytes(4).toString('hex'));
+  const isCode = q.type === 'code';
+  const base = {
+    id: id,
+    type: isCode ? 'code' : 'choice',
+    title: title.slice(0, 1000),
+    score: isCode ? CODE_SCORE : CHOICE_SCORE     // 分值写死，忽略传进来的值
+  };
+  if (isCode) return base;
+
+  const usedKeys = Object.create(null);
+  const options = [];
+  (Array.isArray(q.options) ? q.options : []).forEach(function (o, i) {
+    const text = str(o && o.text);
+    if (!text) return;
+    let key = str(o && o.key);
+    if (!key || usedKeys[key]) key = 'o' + i;
+    usedKeys[key] = 1;
+    options.push({ key: key, text: text.slice(0, 300) });
+  });
+  if (options.length < 2) return null;              // 选择题至少 2 个选项
+  const keys = options.map(function (o) { return o.key; });
+  const seen = Object.create(null);
+  const answer = (Array.isArray(q.answer) ? q.answer : []).map(str).filter(function (k) {
+    if (keys.indexOf(k) < 0 || seen[k]) return false;
+    seen[k] = 1; return true;
+  });
+  if (!answer.length) return null;                  // 必须有正确答案
+  base.options = options;
+  base.multi = !!q.multi;
+  base.answer = base.multi ? answer : [answer[0]];  // 单选只留一个
+  return base;
+}
+
+/* 题库：老数据是按轮次存的（{ r1:{questions:[]}, r2:{...} }），一次性摊平成全局题库 */
+let paper = readJSON(PAPER_FILE, null);
+(function normalizePaper() {
+  let src = [];
+  if (paper && Array.isArray(paper.questions)) {
+    src = paper.questions;                          // 新格式：{ questions:[...] }
+  } else if (paper && typeof paper === 'object' && !Array.isArray(paper)) {
+    Object.keys(paper).forEach(function (k) {        // 老格式：把各轮次的题摊平
+      const r = paper[k];
+      if (r && Array.isArray(r.questions)) src = src.concat(r.questions);
+    });
+  }
+  const out = { questions: [] };
+  const seenId = Object.create(null);
+  src.forEach(function (q) {
+    const n = normQuestion(q);
+    if (!n || seenId[n.id]) return;
+    seenId[n.id] = 1;
+    out.questions.push(n);
+  });
+  if (JSON.stringify(out) !== JSON.stringify(paper)) writeJSON(PAPER_FILE, out);
+  paper = out;
+})();
+
+/* ---------- 作答：{ c:面试者id, at:时间戳, draw:[抽到的题目id], choice:{题目id:[选项key]}, code:{题目id:分数} } ----------
+   **不按轮次隔离**（一个面试者只答一次）。
+   选择题只存"选了什么"、不存分数 → 得分按当前题库实时算；
+   编程题的分数由面试官人工填（每题 0~10）。 */
+let answers = readJSON(ANSWERS_FILE, []);
+if (!Array.isArray(answers)) answers = [];
+(function normalizeAnswers() {
+  const cidSet = Object.create(null);
+  CONFIG.candidates.forEach(function (c) { cidSet[c.id] = 1; });
+  const byCand = Object.create(null);
+  answers.forEach(function (a) {
+    if (!a || typeof a !== 'object' || !cidSet[a.c]) return;   // 面试者已被删
+    const at = Number(a.at) || 0;
+    const prev = byCand[a.c];
+    if (prev && prev.at >= at) return;        // 同一个人只留最新一条（老数据可能按轮次存了多条）
+    byCand[a.c] = {
+      c: a.c,
+      at: at || Date.now(),
+      draw: Array.isArray(a.draw) ? a.draw.map(str).filter(Boolean) : [],
+      choice: (a.choice && typeof a.choice === 'object' && !Array.isArray(a.choice)) ? a.choice : {},
+      code: (a.code && typeof a.code === 'object' && !Array.isArray(a.code)) ? a.code : {}
+    };
+  });
+  const kept = Object.keys(byCand).map(function (k) { return byCand[k]; });
+  if (JSON.stringify(kept) !== JSON.stringify(answers)) writeJSON(ANSWERS_FILE, kept);
+  answers = kept;
+})();
+
+function findAnswer(candId) {
+  return answers.find(function (a) { return a.c === candId; }) || null;
+}
+
+/* 抽题：**每人固定一套**（存进 draw，刷新或重进都不会变）。
+   题库不够时有多少给多少；已经抽过的不重抽。 */
+function drawFor(candId) {
+  let rec = findAnswer(candId);
+  if (!rec) {
+    rec = { c: candId, at: Date.now(), draw: [], choice: {}, code: {} };
+    answers.push(rec);
+  }
+  if (!rec.draw.length) {
+    const pick = function (type, n) {
+      const pool = paper.questions.filter(function (q) { return q.type === type; });
+      for (let i = pool.length - 1; i > 0; i--) {          // Fisher-Yates 洗牌
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+      }
+      return pool.slice(0, n).map(function (q) { return q.id; });
+    };
+    rec.draw = pick('choice', DRAW.choice).concat(pick('code', DRAW.code));
+    writeJSON(ANSWERS_FILE, answers);
+  }
+  return rec;
+}
+
+/* 按抽题顺序取出完整题目对象 */
+function questionsOf(rec) {
+  const byId = Object.create(null);
+  paper.questions.forEach(function (q) { byId[q.id] = q; });
+  return (rec.draw || []).map(function (id) { return byId[id]; }).filter(Boolean);
+}
+
+/* 内置「作答」打分项：答题总得分（选择题自动判 + 编程题人工填），一次性挂到第 2 轮。
+   只在还没有这个打分项时创建；之后完全由用户在「管理 → 打分项 / 轮次」里维护。 */
+(function ensureAnswerDimension() {
+  if (CONFIG.dimensions.some(function (d) { return d.id === 'ans'; })) return;
+  CONFIG.dimensions.push({
+    id: 'ans', name: '作答', mode: 'free',
+    max: DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE
+  });
+  const r2 = CONFIG.rounds.filter(function (r) { return r.name === '第2轮'; })[0] || CONFIG.rounds[1];
+  if (r2) {
+    if (!Array.isArray(r2.dims)) r2.dims = [];
+    if (r2.dims.indexOf('ans') < 0) r2.dims.push('ans');
+  }
+  writeJSON(CONFIG_FILE, CONFIG);
+})();
+
+/* 某道选择题的判分：多选必须与答案完全一致才算对 */
+function choiceScore(q, chosen) {
+  const a = (q.answer || []).slice().sort();
+  const b = (Array.isArray(chosen) ? chosen : []).slice().sort();
+  const ok = a.length > 0 && a.length === b.length && a.every(function (k, i) { return k === b[i]; });
+  return { ok: ok, got: ok ? q.score : 0 };
+}
+
+/* 某人抽到的整套题的作答详情。withAnswer=false 时剥掉正确答案（给面试者端用） */
+function answerDetail(candId, withAnswer) {
+  const rec = findAnswer(candId);
+  const qs = rec ? questionsOf(rec) : [];
+  const chosen = (rec && rec.choice) || {};
+  const codeMap = (rec && rec.code) || {};
+  let choiceGot = 0, choiceFull = 0, codeGot = 0, codeFull = 0;
+  let choiceCount = 0, codeCount = 0, doneCount = 0, okCount = 0;
+  const items = qs.map(function (q) {
+    if (q.type === 'code') {
+      codeCount++; codeFull += q.score;
+      const raw = codeMap[q.id];
+      const has = (raw !== undefined && raw !== null && raw !== '' && isFinite(Number(raw)));
+      const got = has ? Math.max(0, Math.min(q.score, Math.round(Number(raw)))) : null;
+      if (got !== null) codeGot += got;
+      return { id: q.id, type: 'code', title: q.title, score: q.score, got: got };
+    }
+    choiceCount++; choiceFull += q.score;
+    const ch = Array.isArray(chosen[q.id]) ? chosen[q.id].slice() : [];
+    if (ch.length) doneCount++;
+    const r = choiceScore(q, ch);
+    if (r.ok) { okCount++; choiceGot += r.got; }
+    const item = {
+      id: q.id, type: 'choice', title: q.title, score: q.score, multi: !!q.multi,
+      options: q.options.map(function (o) { return { key: o.key, text: o.text }; }),
+      chosen: ch, ok: ch.length ? r.ok : false, got: ch.length ? r.got : 0
+    };
+    if (withAnswer) item.answer = q.answer.slice();
+    return item;
+  });
+  const hasContent = doneCount > 0 || Object.keys(codeMap).length > 0;
+  return {
+    c: candId,
+    at: rec ? rec.at : null,
+    answered: hasContent,        // 「真的答了题」才算已作答（只是打开过卷子不算）
+    items: items,
+    choiceGot: choiceGot, choiceFull: choiceFull,   // 选择题：系统自动判分
+    codeGot: codeGot, codeFull: codeFull,           // 编程题：面试官人工填分
+    total: choiceGot + codeGot,
+    full: choiceFull + codeFull,
+    choiceCount: choiceCount, codeCount: codeCount,
+    doneCount: doneCount, okCount: okCount
+  };
+}
+
 function findGroup(id) {
   return CONFIG.groups.find(function (g) { return g.id === id; }) || null;
 }
@@ -482,7 +687,10 @@ const server = http.createServer(function (req, res) {
 
   /* ---- 静态页面 ---- */
   if (at < 0) {
-    const rel = p === '/' ? 'index.html' : p.replace(/^\/+/, '');
+    /* /apply = 面试者答题页。独立页面，和面试官端完全分开，子路径部署时同样适用 */
+    const clean = p.replace(/\/+$/, '') || '/';
+    const rel = clean === '/' ? 'index.html'
+      : (clean === '/apply' ? 'apply.html' : clean.replace(/^\/+/, ''));
     if (rel.indexOf('..') >= 0) return text(res, 403, 'Forbidden');
     const file = path.join(PUBLIC_DIR, rel);
     return fs.readFile(file, function (err, buf) {
@@ -509,6 +717,147 @@ const server = http.createServer(function (req, res) {
     if (eDim) out.expressLevels = eDim.levels;
     if (wDim) out.willingLevels = wDim.levels;
     return json(res, 200, out);
+  }
+
+  /* ---- 面试者取题：
+         不带 c → 只给面试者名单（选身份用）
+         带 c   → 抽题（首次访问时抽，之后**固定不变**），返回他的题目与已作答内容 ---- */
+  if (p === '/api/paper' && method === 'GET') {
+    const cid = str(u.searchParams.get('c'));
+    const roster = CONFIG.candidates.map(function (c) { return { id: c.id, name: c.name, cls: c.cls }; });
+    if (!cid) {
+      return json(res, 200, {
+        candidates: roster,
+        need: { choice: DRAW.choice, code: DRAW.code },
+        bank: {
+          choice: paper.questions.filter(function (q) { return q.type === 'choice'; }).length,
+          code: paper.questions.filter(function (q) { return q.type === 'code'; }).length
+        }
+      });
+    }
+    if (!CONFIG.candidates.some(function (x) { return x.id === cid; })) {
+      return json(res, 400, { error: '面试者不在名单中' });
+    }
+    const rec = drawFor(cid);
+    return json(res, 200, {
+      c: cid,
+      questions: questionsOf(rec).map(function (q) {
+        if (q.type === 'code') return { id: q.id, type: 'code', title: q.title, score: q.score };
+        return {
+          id: q.id, type: 'choice', title: q.title, score: q.score, multi: !!q.multi,
+          options: q.options.map(function (o) { return { key: o.key, text: o.text }; })
+        };
+      }),
+      choice: rec.choice || {},     // 回填上次的选择，刷新/换设备都能接着答
+      at: rec.at || null
+    });
+  }
+
+  /* ---- 交卷：只接受**他抽到的那几道**选择题的选项；重复提交覆盖 ---- */
+  if (p === '/api/answer' && method === 'POST') {
+    return readBody(req).then(function (raw) {
+      let d;
+      try { d = JSON.parse(raw || '{}'); } catch (e) { return json(res, 400, { error: '数据格式错误' }); }
+
+      const c = CONFIG.candidates.find(function (x) { return x.id === str(d.c); });
+      if (!c) return json(res, 400, { error: '面试者不在名单中' });
+
+      const rec = drawFor(c.id);
+      const qmap = Object.create(null);
+      questionsOf(rec).forEach(function (q) { if (q.type === 'choice') qmap[q.id] = q; });
+
+      const src = (d.choice && typeof d.choice === 'object' && !Array.isArray(d.choice)) ? d.choice : {};
+      const choice = {};
+      Object.keys(src).forEach(function (qid) {
+        const q = qmap[qid];
+        if (!q) return;                       // 不在他抽到的题里的选项直接丢弃
+        const keys = q.options.map(function (o) { return o.key; });
+        const seen = Object.create(null);
+        const picked = (Array.isArray(src[qid]) ? src[qid] : [src[qid]]).map(str).filter(function (k) {
+          if (keys.indexOf(k) < 0 || seen[k]) return false;
+          seen[k] = 1; return true;
+        });
+        if (!picked.length) return;
+        choice[qid] = q.multi ? picked : [picked[0]];
+      });
+
+      rec.choice = choice;
+      rec.at = Date.now();
+      writeJSON(ANSWERS_FILE, answers);
+      return json(res, 200, { ok: true, answered: Object.keys(choice).length });
+    }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
+  }
+
+  /* ---- 编程题人工填分（面试官端）：每题 0 ~ 满分，传 null 清除 ---- */
+  if (p === '/api/codescore' && method === 'POST') {
+    return readBody(req).then(function (raw) {
+      let d;
+      try { d = JSON.parse(raw || '{}'); } catch (e) { return json(res, 400, { error: '数据格式错误' }); }
+
+      const cid = str(d.c);
+      if (!CONFIG.candidates.some(function (x) { return x.id === cid; })) {
+        return json(res, 400, { error: '面试者不在名单中' });
+      }
+      const rec = findAnswer(cid);
+      if (!rec) return json(res, 400, { error: '这位面试者还没开始答题' });
+      if (!rec.code) rec.code = {};
+
+      const qid = str(d.qid);
+      const q = questionsOf(rec).find(function (x) { return x.id === qid; });
+      if (!q || q.type !== 'code') return json(res, 400, { error: '这不是他抽到的编程题' });
+
+      if (d.score === null || d.score === undefined || d.score === '') {
+        delete rec.code[qid];
+      } else {
+        const v = Number(d.score);
+        if (!isFinite(v) || v < 0 || v > q.score) {
+          return json(res, 400, { error: '分数要在 0 ~ ' + q.score + ' 之间' });
+        }
+        rec.code[qid] = Math.round(v);
+      }
+      writeJSON(ANSWERS_FILE, answers);
+      return json(res, 200, { ok: true, detail: answerDetail(cid, true) });
+    }).catch(function (e) { return json(res, 500, { error: String(e.message || e) }); });
+  }
+
+  /* ---- 查看作答（面试官端）：
+         带 c → 该人详情（**含正确答案**，便于对照）
+         不带 c → 一览（谁交了、得了几分） ---- */
+  if (p === '/api/answers' && method === 'GET') {
+    const cid = str(u.searchParams.get('c'));
+    if (!cid) {
+      return json(res, 200, {
+        list: CONFIG.candidates.map(function (c) {
+          const rec = findAnswer(c.id);
+          if (!rec) return { c: c.id, name: c.name, cls: c.cls, answered: false, at: null };
+          const dt = answerDetail(c.id, false);
+          return {
+            c: c.id, name: c.name, cls: c.cls, answered: dt.answered, at: rec.at,
+            total: dt.total, full: dt.full,
+            choiceGot: dt.choiceGot, choiceFull: dt.choiceFull,
+            codeGot: dt.codeGot, codeFull: dt.codeFull,
+            okCount: dt.okCount, choiceCount: dt.choiceCount,
+            doneCount: dt.doneCount, codeCount: dt.codeCount
+          };
+        })
+      });
+    }
+    if (!CONFIG.candidates.some(function (x) { return x.id === cid; })) {
+      return json(res, 400, { error: '面试者不在名单中' });
+    }
+    return json(res, 200, answerDetail(cid, true));
+  }
+
+  /* ---- 题库（管理端用）：**含正确答案**，供「管理 → 题目」渲染 ---- */
+  if (p === '/api/questions' && method === 'GET') {
+    return json(res, 200, {
+      questions: paper.questions,
+      need: { choice: DRAW.choice, code: DRAW.code },
+      bank: {
+        choice: paper.questions.filter(function (q) { return q.type === 'choice'; }).length,
+        code: paper.questions.filter(function (q) { return q.type === 'code'; }).length
+      }
+    });
   }
 
   /* ---- 某位面试官在某轮已打的分（dims：打分项id -> 等级key） ---- */
@@ -740,6 +1089,9 @@ const server = http.createServer(function (req, res) {
           // 同步清掉所有组里此人的打分
           scores = scores.filter(function (s) { return s.c !== id; });
           writeJSON(SCORES_FILE, scores);
+          // 同步清掉此人的作答
+          answers = answers.filter(function (a) { return a.c !== id; });
+          writeJSON(ANSWERS_FILE, answers);
           writeJSON(CONFIG_FILE, CONFIG);
           return json(res, 200, { ok: true, candidates: CONFIG.candidates });
         }
@@ -824,6 +1176,7 @@ const server = http.createServer(function (req, res) {
           // 同步清掉该轮所有打分
           scores = scores.filter(function (s) { return s.r !== id; });
           writeJSON(SCORES_FILE, scores);
+          // 注：作答与题库都不分轮次，删轮次不影响它们
         } else {
           return json(res, 400, { error: '操作错误' });
         }
@@ -948,6 +1301,53 @@ const server = http.createServer(function (req, res) {
         }
         writeJSON(CONFIG_FILE, CONFIG);
         return json(res, 200, { ok: true, dimensions: dims, rounds: CONFIG.rounds });
+      }
+
+      /* --- 题库：全局一份，不分轮次 ---
+         { kind:'paper', op:'add',  q:{...} }          新增
+         { kind:'paper', op:'edit', id, q:{...} }      修改（改答案后历史得分自动重算）
+         { kind:'paper', op:'del',  id }               删除（级联清掉所有人抽题与作答里的这道题）
+         { kind:'paper', op:'move', id, dir:-1|1 }     上移/下移 */
+      if (d.kind === 'paper') {
+        const qs = paper.questions;
+        const BAD = '题目不完整：选择题至少要有 2 个选项和 1 个正确答案';
+
+        if (d.op === 'add') {
+          const q = normQuestion(d.q);
+          if (!q) return json(res, 400, { error: BAD });
+          qs.push(q);
+        } else if (d.op === 'edit') {
+          const id = str(d.id);
+          const i = qs.findIndex(function (x) { return x.id === id; });
+          if (i < 0) return json(res, 400, { error: '题目不存在' });
+          const q = normQuestion(Object.assign({}, d.q, { id: id }));
+          if (!q) return json(res, 400, { error: BAD });
+          qs[i] = q;
+        } else if (d.op === 'del') {
+          const id = str(d.id);
+          const i = qs.findIndex(function (x) { return x.id === id; });
+          if (i < 0) return json(res, 400, { error: '题目不存在' });
+          qs.splice(i, 1);
+          // 级联：把这道题从所有人的抽题与作答里移除
+          answers.forEach(function (a) {
+            a.draw = (a.draw || []).filter(function (x) { return x !== id; });
+            if (a.choice) delete a.choice[id];
+            if (a.code) delete a.code[id];
+          });
+          writeJSON(ANSWERS_FILE, answers);
+        } else if (d.op === 'move') {
+          const id = str(d.id);
+          const i = qs.findIndex(function (x) { return x.id === id; });
+          if (i < 0) return json(res, 400, { error: '题目不存在' });
+          const to = i + (Number(d.dir) < 0 ? -1 : 1);
+          if (to >= 0 && to < qs.length) {
+            const tmp = qs[i]; qs[i] = qs[to]; qs[to] = tmp;
+          }
+        } else {
+          return json(res, 400, { error: '操作错误' });
+        }
+        writeJSON(PAPER_FILE, paper);
+        return json(res, 200, { ok: true, questions: qs });
       }
 
       return json(res, 400, { error: '类型错误' });
