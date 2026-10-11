@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fb">
+<title>面试答题</title>
+<style>
+:root{
+  --bg:#f4f6fb; --card:#ffffff; --ink:#0f1729; --ink2:#5b6478; --ink3:#98a2b3;
+  --line:#e9edf4; --line2:#dde3ee;
+  --brand:#3d5bfd; --brand2:#6b5cff; --brand-soft:#eef1ff;
+  --bad:#f04438; --bad-soft:#fef3f2; --warn:#f79009; --good:#12b76a; --good-soft:#eafaf1;
+  --r-sm:11px; --r:18px; --r-lg:22px;
+  --sh-sm:0 1px 2px rgba(16,24,40,.04);
+  --sh:0 4px 16px rgba(16,24,40,.07);
+  --sh-lg:0 12px 32px rgba(16,24,40,.13);
+  --pad-x:16px; --maxw:720px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;overscroll-behavior-y:none}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-feature-settings:"tnum";
+}
+button{font-family:inherit;font-size:inherit;color:inherit;border:0;background:none;cursor:pointer;padding:0}
+input,textarea{font-family:inherit}
+:focus-visible{outline:2.5px solid var(--brand);outline-offset:2px;border-radius:6px}
+[hidden]{display:none !important}
+@media (prefers-reduced-motion:reduce){*{transition-duration:.01ms !important;animation-duration:.01ms !important}}
+
+.appbar{
+  position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 12px) var(--pad-x) 11px;
+  background:rgba(244,246,251,.86);backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-bottom:1px solid rgba(233,237,244,.85);
+  max-width:var(--maxw);margin:0 auto;
+}
+.appbar-l{flex:1;min-width:0}
+.appbar-title{font-size:18.5px;font-weight:700;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appbar-sub{font-size:12px;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{padding:14px var(--pad-x) calc(108px + env(safe-area-inset-bottom));max-width:var(--maxw);margin:0 auto}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-sm);padding:16px;margin-bottom:12px}
+.card-title{font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:10px}
+.empty{text-align:center;color:var(--ink3);font-size:14px;padding:26px 10px}
+
+.add-row{display:flex;gap:8px}
+.add-row input{
+  flex:1;min-width:0;height:46px;padding:0 14px;border:1.5px solid var(--line);border-radius:14px;
+  background:#f7f9fc;font-size:15.5px;transition:.16s;
+}
+.add-row input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(61,91,253,.1)}
+
+.pick-list{margin-top:12px;max-height:52vh;overflow:auto;-webkit-overflow-scrolling:touch}
+.pick-row{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:#fff;
+  margin-bottom:8px;transition:.16s;
+}
+.pick-row:active{transform:scale(.985);background:var(--brand-soft);border-color:var(--brand)}
+.pick-name{font-size:16px;font-weight:600}
+.pick-cls{font-size:12.5px;color:var(--ink3);margin-left:auto}
+
+.who{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:var(--brand-soft);border:1px solid #dfe4ff;border-radius:14px;
+  padding:11px 14px;margin-bottom:12px;font-size:13.5px;color:#33406b;
+}
+.who b{font-weight:700}
+.who button{margin-left:auto;font-size:12.5px;color:var(--brand);font-weight:600;text-decoration:underline}
+
+.q{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-sm);padding:16px;margin-bottom:12px}
+.q-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.q-no{
+  flex:none;width:24px;height:24px;border-radius:8px;background:var(--brand-soft);color:var(--brand);
+  display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;
+}
+.q-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#f1f3f9;color:var(--ink2)}
+.q-tag.code{background:#fff4e5;color:#b26a00}
+.q-tag.multi{background:#eef1ff;color:var(--brand)}
+.q-score{margin-left:auto;font-size:12px;color:var(--ink3);font-weight:600}
+.q-title{font-size:16px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.q-note{
+  margin-top:12px;padding:11px 13px;border-radius:12px;background:#fff8ec;border:1px solid #ffe6bd;
+  font-size:13px;color:#8a5a00;line-height:1.55;
+}
+.q-opts{margin-top:4px}
+.opt{
+  display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
+  padding:13px 14px;margin-top:9px;border:1.5px solid var(--line);border-radius:14px;
+  background:#fff;transition:.16s;font-size:15px;line-height:1.5;
+}
+.opt:active{transform:scale(.99)}
+.opt.on{border-color:var(--brand);background:var(--brand-soft)}
+.opt-k{
+  flex:none;width:24px;height:24px;border-radius:8px;background:#f1f3f9;color:var(--ink2);
+  display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;transition:.16s;
+}
+.opt.on .opt-k{background:var(--brand);color:#fff}
+.opt-t{flex:1;min-width:0;word-break:break-word}
+
+.footbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;
+  display:flex;align-items:center;gap:12px;
+  padding:12px var(--pad-x) calc(12px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(18px);
+  -webkit-backdrop-filter:saturate(180%) blur(18px);
+  border-top:1px solid var(--line);
+}
+.foot-inner{display:flex;align-items:center;gap:12px;width:100%;max-width:var(--maxw);margin:0 auto}
+.foot-info{flex:1;min-width:0;font-size:13.5px;color:var(--ink2)}
+.foot-info b{font-size:17px;font-weight:800;color:var(--ink);margin:0 2px}
+.btn-primary{
+  flex:none;min-width:132px;padding:14px 24px;border-radius:14px;color:#fff;font-size:16px;font-weight:700;
+  background:linear-gradient(135deg,#4a6cf7 0%,#6b5cff 100%);
+  box-shadow:0 8px 20px rgba(74,108,247,.28);transition:.16s;
+}
+.btn-primary:active{transform:scale(.97)}
+.btn-primary[disabled]{opacity:.45;box-shadow:none}
+
+.done-card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--sh);padding:34px 22px;text-align:center;margin-top:24px;
+}
+.done-ic{
+  width:60px;height:60px;border-radius:50%;margin:0 auto 16px;background:var(--good-soft);color:var(--good);
+  display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;
+}
+.done-t{font-size:20px;font-weight:800;letter-spacing:-.3px}
+.done-s{font-size:14px;color:var(--ink2);margin:10px 0 22px;line-height:1.65}
+.done-card .btn-primary{min-width:100%;}
+
+.mask{position:fixed;inset:0;background:rgba(15,23,41,.42);z-index:60;animation:mfade .2s ease}
+@keyframes mfade{from{opacity:0}to{opacity:1}}
+.sheet{
+  position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--card);
+  border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:var(--sh-lg);
+  max-height:88vh;display:flex;flex-direction:column;
+  transform:translateY(102%);transition:transform .28s cubic-bezier(.22,.8,.28,1);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.sheet.show{transform:translateY(0)}
+.sheet-grab{width:38px;height:4px;border-radius:99px;background:var(--line2);margin:9px auto 2px;flex:none}
+.sheet-head{display:flex;align-items:flex-start;gap:12px;padding:10px 18px 12px;flex:none}
+.sheet-name{font-size:17px;font-weight:700;letter-spacing:-.2px}
+.sheet-body{padding:0 18px 8px;overflow:auto;-webkit-overflow-scrolling:touch}
+.sheet-foot{flex:none;padding:12px 18px 16px;border-top:1px solid var(--line);display:flex;gap:10px}
+.cf-body{font-size:14.5px;color:var(--ink2);line-height:1.7;padding:2px 0 12px}
+.b-cancel{flex:1;padding:14px;border-radius:14px;background:#f5f7fb;color:var(--ink2);font-weight:700}
+.b-save{flex:1;padding:14px;border-radius:14px;color:#fff;font-weight:700;background:linear-gradient(135deg,#4a6cf7 0%,#6b5cff 100%)}
+.b-cancel:active,.b-save:active{transform:scale(.98)}
+
+.toast{
+  position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:rgba(15,23,41,.94);color:#fff;font-size:14px;padding:12px 22px;border-radius:999px;
+  z-index:90;max-width:82vw;text-align:center;box-shadow:var(--sh-lg);
+  animation:toastIn .22s cubic-bezier(.22,.8,.28,1);
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+</style>
+</head>
+<body>
+
+<header class="appbar">
+  <div class="appbar-l">
+    <div class="appbar-title" id="topTitle">面试答题</div>
+    <div class="appbar-sub" id="topSub"></div>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<div class="footbar" id="footbar" hidden>
+  <div class="foot-inner" id="footInner"></div>
+</div>
+
+<div class="mask" id="mask" hidden></div>
+<section class="sheet" id="sheet" hidden></section>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  var API_BASE = location.pathname.replace(/[^\/]*$/, '');
+  var LS_ME = 'interview_apply_me_v1';
+
+  var BANK = null;    // { candidates, need, bank } —— 选身份用
+  var ME = null;      // 选中的面试者 { id, name, cls }
+  var PAPER = null;   // 抽到的卷子 { c, questions, choice, at }
+  var PICK = {};      // 题目id -> [选项key]
+  var STEP = 'pick';  // pick | answer | done
+
+  function $(s) { return document.querySelector(s); }
+  function el(t, c, h) { var e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function toast(m) {
+    var t = $('#toast'); t.textContent = m; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2200);
+  }
+  function api(p, o) {
+    return fetch(API_BASE + p.replace(/^\//, ''), o).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (!r.ok) throw new Error((j && j.error) || ('请求失败 ' + r.status));
+        return j;
+      });
+    });
+  }
+  function post(p, body) {
+    return api(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }
+
+  /* ---------- 身份记忆 + 打开某人的卷子 ---------- */
+  function rememberMe(c) {
+    try { localStorage.setItem(LS_ME, JSON.stringify({ id: c.id })); } catch (e) {}
+  }
+  function forgetMe() {
+    try { localStorage.removeItem(LS_ME); } catch (e) {}
+  }
+  function restoreMe() {
+    try {
+      var d = JSON.parse(localStorage.getItem(LS_ME) || 'null');
+      if (!d || !d.id) return null;
+      for (var i = 0; i < BANK.candidates.length; i++) {
+        if (BANK.candidates[i].id === d.id) return BANK.candidates[i];
+      }
+    } catch (e) {}
+    return null;
+  }
+  /* 打开某人的卷子：首次访问时抽题（抽到就固定下来），并回填上次的选择 */
+  function openFor(c) {
+    return api('/api/paper?c=' + encodeURIComponent(c.id)).then(function (d) {
+      ME = c;
+      PAPER = d;
+      PICK = {};
+      var ch = d.choice || {};
+      Object.keys(ch).forEach(function (k) { PICK[k] = (ch[k] || []).slice(); });
+      rememberMe(c);
+      STEP = 'answer';
+      render();
+      window.scrollTo(0, 0);
+    });
+  }
+
+  /* ---------- 应用内二次确认（不用原生 confirm：Chrome 弹几次后会静默失败） ---------- */
+  function askConfirm(title, msg, okText) {
+    return new Promise(function (resolve) {
+      var sheet = $('#sheet');
+      sheet.innerHTML = '<div class="sheet-grab"></div>' +
+        '<div class="sheet-head"><div class="sheet-name">' + esc(title) + '</div></div>' +
+        '<div class="sheet-body"><div class="cf-body">' + esc(msg) + '</div></div>' +
+        '<div class="sheet-foot">' +
+          '<button class="b-cancel" id="cfNo">再看看</button>' +
+          '<button class="b-save" id="cfYes">' + esc(okText || '确定') + '</button>' +
+        '</div>';
+      clearTimeout(sheet._hideT);
+      $('#mask').hidden = false;
+      sheet.hidden = false;
+      requestAnimationFrame(function () { sheet.classList.add('show'); });
+      var settled = false;
+      function done(v) {
+        if (settled) return;
+        settled = true;
+        sheet.classList.remove('show');
+        clearTimeout(sheet._hideT);
+        sheet._hideT = setTimeout(function () { sheet.hidden = true; sheet.innerHTML = ''; }, 280);
+        $('#mask').hidden = true;
+        resolve(v);
+      }
+      $('#cfNo').onclick = function () { done(false); };
+      $('#cfYes').onclick = function () { done(true); };
+    });
+  }
+  $('#mask').onclick = function () {
+    var yes = $('#cfNo');
+    if (yes) yes.click();
+  };
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    if (STEP === 'pick') return renderPick();
+    if (STEP === 'done') return renderDone();
+    return renderAnswer();
+  }
+
+  /* 第一步：从名单里选自己 */
+  function renderPick() {
+    var need = BANK.need || { choice: 0, code: 0 };
+    var bank = BANK.bank || { choice: 0, code: 0 };
+    $('#topTitle').textContent = '选择你的名字';
+    $('#topSub').textContent = '名单共 ' + BANK.candidates.length + ' 人 · 每人随机抽 ' +
+      need.choice + ' 道选择题 + ' + need.code + ' 道编程题';
+    $('#footbar').hidden = true;
+    var main = $('#main'); main.innerHTML = '';
+
+    if (!BANK.candidates.length) {
+      main.appendChild(el('div', 'card empty', '名单里还没有面试者，请联系面试官'));
+      return;
+    }
+
+    if (bank.choice < need.choice || bank.code < need.code) {
+      main.appendChild(el('div', 'card',
+        '<div style="font-size:13px;line-height:1.65;color:#8a5a00">' +
+        '⚠ 题库还没备齐：现在有选择题 <b>' + bank.choice + '</b> 道、编程题 <b>' + bank.code + '</b> 道，' +
+        '需要各 <b>' + need.choice + '</b> / <b>' + need.code + '</b> 道。请先联系面试官。</div>'));
+    }
+
+    var card = el('div', 'card');
+    card.innerHTML = '<div class="card-title">请找到你自己的名字，点一下进入答题</div>' +
+      '<div class="add-row"><input id="pickSearch" placeholder="输入姓名或班级搜索" autocomplete="off"></div>' +
+      '<div class="pick-list" id="pickList"></div>';
+    main.appendChild(card);
+
+    function paint(kw) {
+      var box = $('#pickList');
+      box.innerHTML = '';
+      var k = (kw || '').toLowerCase();
+      var list = BANK.candidates.filter(function (c) {
+        return !k || (c.name + ' ' + (c.cls || '')).toLowerCase().indexOf(k) >= 0;
+      });
+      if (!list.length) { box.innerHTML = '<div class="empty">没找到，换个关键词试试</div>'; return; }
+      list.forEach(function (c) {
+        var b = el('button', 'pick-row');
+        b.innerHTML = '<span class="pick-name">' + esc(c.name) + '</span>' +
+          (c.cls ? '<span class="pick-cls">' + esc(c.cls) + '</span>' : '');
+        b.onclick = function () {
+          b.disabled = true;
+          openFor(c).catch(function (e) { b.disabled = false; toast('加载失败：' + e.message); });
+        };
+        box.appendChild(b);
+      });
+    }
+    paint('');
+    var inp = $('#pickSearch');
+    inp.oninput = function () { paint(this.value.trim()); };
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 120);
+  }
+
+  /* 第二步：答题 */
+  function renderAnswer() {
+    var qs = (PAPER && PAPER.questions) || [];
+    var chs = qs.filter(function (q) { return q.type === 'choice'; });
+    $('#topTitle').textContent = '答题';
+
+    function countDone() {
+      var n = 0;
+      chs.forEach(function (q) { if ((PICK[q.id] || []).length) n++; });
+      return n;
+    }
+    function updateHead() {
+      $('#topSub').textContent = ME.name + (ME.cls ? ' · ' + ME.cls : '') +
+        (chs.length ? ' · 已答 ' + countDone() + '/' + chs.length : '');
+    }
+    updateHead();
+
+    var main = $('#main'); main.innerHTML = '';
+
+    var who = el('div', 'who');
+    who.innerHTML = '<span>答题人：<b>' + esc(ME.name) + '</b>' + (ME.cls ? ' · ' + esc(ME.cls) : '') + '</span>' +
+      '<button id="switchMe">不是我？</button>';
+    main.appendChild(who);
+    $('#switchMe').onclick = function () {
+      forgetMe();
+      ME = null; PICK = {};
+      STEP = 'pick';
+      render();
+    };
+
+    if (!qs.length) {
+      main.appendChild(el('div', 'card empty',
+        '你还没有抽到题目<br><span style="font-size:13px">请联系面试官检查题库</span>'));
+      $('#footbar').hidden = true;
+      return;
+    }
+
+    qs.forEach(function (q, i) { main.appendChild(qCard(q, i + 1)); });
+
+    /* 底部常驻栏：只有存在选择题时才需要提交 */
+    var fb = $('#footbar');
+    if (!chs.length) { fb.hidden = true; return; }
+    fb.hidden = false;
+    $('#footInner').innerHTML =
+      '<div class="foot-info" id="footInfo">已答 <b>' + countDone() + '</b>/' + chs.length + ' 题</div>' +
+      '<button class="btn-primary" id="submitBtn">提交</button>';
+
+    function refreshFoot() {
+      $('#footInfo').innerHTML = '已答 <b>' + countDone() + '</b>/' + chs.length + ' 题';
+      updateHead();
+    }
+    /* 选项变化时只局部刷新，不整页重绘（避免长列表滚动位置丢失） */
+    main._refreshFoot = refreshFoot;
+
+    $('#submitBtn').onclick = function () { submit(chs, countDone, refreshFoot); };
+  }
+
+  function qCard(q, no) {
+    var card = el('div', 'q');
+
+    if (q.type === 'code') {
+      card.innerHTML = '<div class="q-head"><span class="q-no">' + no + '</span>' +
+        '<span class="q-tag code">编程题</span>' +
+        '<span class="q-score">' + q.score + ' 分</span></div>' +
+        '<div class="q-title">' + esc(q.title) + '</div>' +
+        '<div class="q-note">这题请在 VS Code 里编写，写好后告诉面试官（不需要在这里提交）。</div>';
+      return card;
+    }
+
+    card.innerHTML = '<div class="q-head"><span class="q-no">' + no + '</span>' +
+      (q.multi ? '<span class="q-tag multi">多选</span>' : '') +
+      '<span class="q-score">' + q.score + ' 分</span></div>' +
+      '<div class="q-title">' + esc(q.title) + '</div>' +
+      '<div class="q-opts"></div>';
+
+    var box = card.querySelector('.q-opts');
+    var cur = PICK[q.id] || [];
+    q.options.forEach(function (o, i) {
+      var b = el('button', 'opt' + (cur.indexOf(o.key) >= 0 ? ' on' : ''));
+      b.innerHTML = '<span class="opt-k">' + String.fromCharCode(65 + i) + '</span>' +
+        '<span class="opt-t">' + esc(o.text) + '</span>';
+      b.onclick = function () {
+        var arr = (PICK[q.id] || []).slice();
+        var at = arr.indexOf(o.key);
+        if (q.multi) {
+          if (at >= 0) arr.splice(at, 1); else arr.push(o.key);
+        } else {
+          arr = at >= 0 ? [] : [o.key];     // 再点一下取消选择
+        }
+        PICK[q.id] = arr;
+        var btns = box.querySelectorAll('.opt');
+        q.options.forEach(function (oo, j) {
+          btns[j].className = 'opt' + (arr.indexOf(oo.key) >= 0 ? ' on' : '');
+        });
+        var m = $('#main');
+        if (m._refreshFoot) m._refreshFoot();
+      };
+      box.appendChild(b);
+    });
+    return card;
+  }
+
+  function submit(chs, countDone, refreshFoot) {
+    var miss = chs.length - countDone();
+    function go() {
+      var choice = {};
+      Object.keys(PICK).forEach(function (k) { if ((PICK[k] || []).length) choice[k] = PICK[k]; });
+      var btn = $('#submitBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+      post('/api/answer', { c: ME.id, choice: choice }).then(function () {
+        STEP = 'done';
+        render();
+        window.scrollTo(0, 0);
+      }).catch(function (e) {
+        if (btn) { btn.disabled = false; btn.textContent = '提交'; }
+        toast('提交失败：' + e.message);
+      });
+    }
+    if (miss > 0) {
+      askConfirm('还有 ' + miss + ' 题没答', '没作答的题不会得分。确定现在提交吗？', '确定提交')
+        .then(function (v) { if (v) go(); });
+    } else {
+      go();
+    }
+  }
+
+  /* 第三步：提交完成 */
+  function renderDone() {
+    $('#topTitle').textContent = '已提交';
+    $('#topSub').textContent = ME.name + (ME.cls ? ' · ' + ME.cls : '');
+    $('#footbar').hidden = true;
+    var main = $('#main'); main.innerHTML = '';
+    var card = el('div', 'done-card');
+    card.innerHTML =
+      '<div class="done-ic">✓</div>' +
+      '<div class="done-t">提交成功</div>' +
+      '<div class="done-s">' + esc(ME.name) + '，你的答案已经记录。<br>' +
+      '如果需要修改，点下面的按钮可以重新作答（会覆盖上一次的答案）。</div>' +
+      '<button class="btn-primary" id="againBtn">重新作答</button>';
+    main.appendChild(card);
+    $('#againBtn').onclick = function () {
+      STEP = 'answer';
+      render();
+      window.scrollTo(0, 0);
+    };
+  }
+
+  /* ---------- 启动 ---------- */
+  function boot() {
+    api('/api/paper').then(function (d) {
+      BANK = d;
+      var me = restoreMe();
+      if (me) {
+        openFor(me).catch(function () { STEP = 'pick'; render(); });
+      } else {
+        STEP = 'pick';
+        render();
+      }
+    }).catch(function (e) {
+      $('#main').innerHTML = '<div class="card empty">加载失败：' + esc(e.message) + '</div>';
+    });
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
