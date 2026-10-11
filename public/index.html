@@ -678,6 +678,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   var RANK = null;       // 统一排名的行
   var PAPER = null;      // 题库：{ questions:[...], need:{choice,code}, bank:{choice,code} }，null = 还没拉过
   var ANS = null;        // 作答一览：面试者id -> { answered, choiceGot, codeGot, ... }
+  var SHEET_REFRESH = null;   // 当前打分弹窗的 refresh()，给「改完编程题分」这类异步回调用来补刷界面
   var LS_KEY = 'interview_me_v2';
   var API_BASE = location.pathname.replace(/[^\/]*$/, '');
 
@@ -1152,12 +1153,19 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       .catch(function () {});
   }
 
-  /* 把「选择题自动分 + 编程题人工分」的合计同步进「作答」打分项（面试官还能手改） */
-  function syncAnsDim(total) {
-    var inp = $('#free_ans');
-    if (!inp) return;
-    inp.value = String(total);
-    inp.dispatchEvent(new Event('input', { bubbles: true }));
+  /* 编程题分改完之后：把最新的作答合计写回 ANS 缓存，
+     再补刷打分弹窗里的「自动打分项」只读框和底部合计（否则只读框会一直显示旧分）。 */
+  function syncAnsDim(c, dt) {
+    if (ANS && dt) {
+      var a = ANS[c.id] || (ANS[c.id] = { c: c.id });
+      a.answered = dt.answered;
+      a.choiceGot = dt.choiceGot; a.choiceFull = dt.choiceFull;
+      a.codeGot = dt.codeGot; a.codeFull = dt.codeFull;
+      a.total = dt.total; a.full = dt.full;
+      a.okCount = dt.okCount; a.choiceCount = dt.choiceCount;
+      a.doneCount = dt.doneCount; a.codeCount = dt.codeCount;
+    }
+    if (SHEET_REFRESH) SHEET_REFRESH();
   }
 
   function bindAnsEvents(c, d) {
@@ -1181,7 +1189,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
             var cs = $('#ansCodeSum'); if (cs) cs.textContent = dt.codeGot;
             var hit = dt.items.filter(function (x) { return x.id === qid; })[0];
             inp.value = (hit && hit.got !== null && hit.got !== undefined) ? hit.got : '';
-            syncAnsDim(dt.total);
+            syncAnsDim(c, dt);
             toast('已记下，合计 ' + dt.total + ' 分');
           })
           .catch(function (e) { toast(e.message); });
@@ -1352,8 +1360,9 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
     function refresh() {
       var ok = gradeOk();
       var cmOk = cmBox.value.trim() !== origCm;   // 评语有改动才允许「只存评语」
-      $('#totalNum').textContent = ok ? (gradeSum() + ' 分') : '—';
-      $('#saveBtn').disabled = !(ok || cmOk);
+      /* 取元素时判空：refresh 可能在弹层已经关掉之后被异步回调触发 */
+      var tn = $('#totalNum'); if (tn) tn.textContent = ok ? (gradeSum() + ' 分') : '—';
+      var sb = $('#saveBtn'); if (sb) sb.disabled = !(ok || cmOk);
       /* 自动项：把系统算出来的分刷新到只读框 */
       ds.forEach(function (dm) {
         if (!dimIsAuto(dm)) return;
@@ -1449,6 +1458,7 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
       }).catch(function (e) { $('#saveBtn').disabled = false; toast('保存失败：' + e.message); });
     };
 
+    SHEET_REFRESH = refresh;
     refresh();
   }
 
