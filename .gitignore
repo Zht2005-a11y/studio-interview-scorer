@@ -16,3 +16,6 @@ npm-debug.log*
 
 # 本地工具数据
 .workbuddy-ai/
+
+# 题库导入脚本：内含面试题的正确答案，仓库是公开的，绝不能提交
+import_questions.js
