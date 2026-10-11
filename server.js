@@ -88,6 +88,12 @@ const ANSWERS_FILE = path.join(DATA_DIR, 'answers.json');    // 面试者的作�
 function uid() { return 'c_' + crypto.randomBytes(4).toString('hex'); }
 function str(v) { return typeof v === 'string' ? v.trim() : ''; }
 
+/* 题目分值（写死）与抽题数：选择题 5 分/道、编程题 10 分/道，每人抽 3 选 + 2 编。
+   放在 normalize 之前 —— 「自动」打分项算满分时要用到这两个常量。 */
+const CHOICE_SCORE = 5;                // 每道选择题固定 5 分
+const CODE_SCORE = 10;                 // 每道编程题固定 10 分
+const DRAW = { choice: 3, code: 2 };   // 每人随机抽 3 道选择题 + 2 道编程题
+
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
 }
@@ -154,7 +160,16 @@ function normalize(cfg) {
     cfg.rounds = [{ id: 'r1', name: '第1轮' }, { id: 'r2', name: '第2轮' }];
   } else {
     cfg.rounds = cfg.rounds.map(function (r) {
-      return { id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'), name: str(r && r.name) || '轮次' };
+      const o = {
+        id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'),
+        name: str(r && r.name) || '轮次'
+      };
+      /* ⚠️ 必须原样保留 dims（本轮考察哪些打分项）。
+         以前这里只返回 {id,name}，把 dims 丢掉了 —— 后面那段会当成"老数据没配过"，
+         于是每次重启都把各轮的考察范围重置成"当前全部打分项"，用户配过的范围全丢。
+         dims 缺失时才不带该字段，留给下面统一补全。 */
+      if (Array.isArray(r && r.dims)) o.dims = r.dims.slice();
+      return o;
     });
   }
 
@@ -179,9 +194,10 @@ function normalize(cfg) {
       score: Number(lv && lv.score) || 0
     };
   };
-  /* 打分项两种类型：
+  /* 打分项三种类型：
      - 选等级型（默认）：{ id, name, levels:[{key,label,score}] }
      - 自由填分型：      { id, name, mode:'free', max } —— 面试官自己填 0~max 的分数
+     - 自动计分型：      { id, name, mode:'auto', source, max } —— 分数由作答记录实时算出，面试官不填
      老数据没有 mode 字段，一律按「选等级型」处理，行为不变。 */
   const normMax = function (v) {
     const n = Number(v);
@@ -190,6 +206,17 @@ function normalize(cfg) {
   const normDim = function (dm, di) {
     const id = str(dm && dm.id) || 'd_' + crypto.randomBytes(3).toString('hex');
     const name = str(dm && dm.name) || ('打分项' + (di + 1));
+    if (dm && dm.mode === 'auto') {
+      /* 自动打分项：分数由系统按作答记录**实时算出**，面试官不填、也改不了。
+         source: 'answer' = 选择题自动分 + 编程题人工分（默认）；
+                 'choice' / 'code' 只取其中一项。 */
+      const src = str(dm.source);
+      const source = (src === 'choice' || src === 'code') ? src : 'answer';
+      const max = source === 'choice' ? DRAW.choice * CHOICE_SCORE
+        : source === 'code' ? DRAW.code * CODE_SCORE
+          : DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE;
+      return { id: id, name: name, mode: 'auto', source: source, max: max };
+    }
     if (dm && dm.mode === 'free') {
       return { id: id, name: name, mode: 'free', max: normMax(dm.max) };
     }
@@ -291,9 +318,6 @@ if (!Array.isArray(scores)) scores = [];
      code（编程题）  ：{ id, type:'code',   title, score:10 }
    编程题在本系统里**只展示题面、不作答**（面试者用 VS Code 写），
    分数由面试官在打分时逐题人工填（0~10）。 */
-const CHOICE_SCORE = 5;                // 每道选择题固定 5 分
-const CODE_SCORE = 10;                 // 每道编程题固定 10 分
-const DRAW = { choice: 3, code: 2 };   // 每人随机抽 3 道选择题 + 2 道编程题
 
 function normQuestion(q) {
   if (!q || typeof q !== 'object') return null;
@@ -421,18 +445,41 @@ function questionsOf(rec) {
 
 /* 内置「作答」打分项：答题总得分（选择题自动判 + 编程题人工填），一次性挂到第 2 轮。
    只在还没有这个打分项时创建；之后完全由用户在「管理 → 打分项 / 轮次」里维护。 */
+/* 内置「答题」打分项：选择题系统自动判分 + 编程题面试官人工分，**实时算、面试官不填**。
+   第一次创建时挂到「第2轮」；已存在的老版本（自由填分型）就地升级成自动型，名字保留用户自己起的。 */
 (function ensureAnswerDimension() {
-  if (CONFIG.dimensions.some(function (d) { return d.id === 'ans'; })) return;
-  CONFIG.dimensions.push({
-    id: 'ans', name: '作答', mode: 'free',
-    max: DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE
-  });
+  const AUTO_MAX = DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE;
+  const found = CONFIG.dimensions.filter(function (d) { return d.id === 'ans'; })[0];
   const r2 = CONFIG.rounds.filter(function (r) { return r.name === '第2轮'; })[0] || CONFIG.rounds[1];
+  let changed = false;
+
+  if (!found) {
+    CONFIG.dimensions.push({ id: 'ans', name: '答题得分', mode: 'auto', source: 'answer', max: AUTO_MAX });
+    changed = true;
+  } else if (found.mode !== 'auto') {
+    /* 老版本这里是「自由填分」型、由面试官手填，现在改成自动算分（名字保留用户自己起的）。
+       顺手把它从「非第2轮」的考察范围里摘掉 —— 自动分只算在第2轮。
+       ⚠️ 这是**一次性**迁移：改完 mode 就变 auto 了，下次启动不会再进来，用户后来手动加回去也不会被删。 */
+    delete found.levels;
+    found.mode = 'auto';
+    found.source = 'answer';
+    found.max = AUTO_MAX;
+    if (r2) {
+      CONFIG.rounds.forEach(function (rd) {
+        if (rd.id === r2.id || !Array.isArray(rd.dims)) return;
+        if (rd.dims.indexOf('ans') >= 0) {
+          rd.dims = rd.dims.filter(function (x) { return x !== 'ans'; });
+        }
+      });
+    }
+    changed = true;
+  }
+
   if (r2) {
     if (!Array.isArray(r2.dims)) r2.dims = [];
-    if (r2.dims.indexOf('ans') < 0) r2.dims.push('ans');
+    if (r2.dims.indexOf('ans') < 0) { r2.dims.push('ans'); changed = true; }
   }
-  writeJSON(CONFIG_FILE, CONFIG);
+  if (changed) writeJSON(CONFIG_FILE, CONFIG);
 })();
 
 /* 某道选择题的判分：多选必须与答案完全一致才算对 */
@@ -488,6 +535,20 @@ function answerDetail(candId, withAnswer) {
   };
 }
 
+/* ---------- 「自动」打分项的取值 ----------
+   由作答记录**实时算出**，不落盘：所以改了选择题答案、改了分值、面试官给编程题打分，
+   排名都会立刻跟着变。
+   返回 null 表示这位面试者还没有可用的作答（没抽过题 / 一道都没答），此时该项不计分。 */
+function isAutoDim(d) { return !!d && d.mode === 'auto'; }
+function autoScoreFor(candId, dim) {
+  if (!findAnswer(candId)) return null;
+  const dt = answerDetail(candId, false);
+  if (!dt.items.length || !dt.answered) return null;
+  if (dim && dim.source === 'choice') return dt.choiceGot;   // 只要选择题自动分
+  if (dim && dim.source === 'code') return dt.codeGot;       // 只要编程题人工分
+  return dt.total;                                           // 选择题 + 编程题
+}
+
 function findGroup(id) {
   return CONFIG.groups.find(function (g) { return g.id === id; }) || null;
 }
@@ -512,6 +573,11 @@ function dimsOfRound(roundId) {
   return CONFIG.dimensions.filter(function (d) { return set[d.id]; });
 }
 
+/* 某一轮考察范围里的「自动」打分项 */
+function autoDimsOfRound(roundId) {
+  return dimsOfRound(roundId).filter(isAutoDim);
+}
+
 /* 一条打分记录 -> { items:[{name,label,score}], total }
    总分只累计「该记录所属轮次考察范围之内」的打分项 —— 本轮不考察的项不计入。
    自由填分型没有 label，前端按 label 为空处理。 */
@@ -520,6 +586,7 @@ function detailOf(s) {
   const items = [];
   let total = 0;
   dimsOfRound(s.r).forEach(function (d) {
+    if (d.mode === 'auto') return;      // 自动项不取存档值，统一由 applyAutoTo 实时算
     if (d.mode === 'free') {
       const v = Number(dm[d.id]);
       if (isFinite(v) && v >= 0) { items.push({ name: d.name, label: '', score: v }); total += v; }
@@ -531,8 +598,44 @@ function detailOf(s) {
   return { items: items, total: total };
 }
 
-/* 通用排名行：rs 为打分记录集合，pred 进一步筛选（按组等）；返回带竞争排名的行数组 */
-function rankRows(rs, pred) {
+/* ---------- 把「自动打分项」的分数并进排名行 ----------
+   加在面试官平均分之上，并作为一条独立明细「答题（自动）」显示。
+   roundIds = 这次统计涉及哪些轮次；只对考察范围里含自动打分项的轮次生效。
+   副作用：会改 row.avg / row.detail / row.auto；返回是否真的并入了分数。 */
+function applyAutoTo(row, roundIds, withRoundName) {
+  const list = [];
+  const seen = Object.create(null);
+  (roundIds || []).forEach(function (rid) {
+    autoDimsOfRound(rid).forEach(function (d) {
+      if (!seen[d.id]) { seen[d.id] = 1; list.push({ d: d, rid: rid }); }
+    });
+  });
+  if (!list.length) return false;
+
+  let add = 0, got = 0;
+  list.forEach(function (x) {
+    const v = autoScoreFor(row.id, x.d);
+    if (v === null) return;
+    got++;
+    add += v;
+    const rd = findRound(x.rid);
+    row.detail.push({
+      interviewer: '答题（自动）',
+      round: withRoundName && rd ? rd.name : '',
+      items: [{ name: x.d.name, label: '', score: v }],
+      total: v
+    });
+  });
+  if (!got) return false;
+
+  row.auto = add;
+  row.avg = Math.round(((row.avg === null ? 0 : row.avg) + add) * 100) / 100;
+  return true;
+}
+
+/* 通用排名行：rs 为打分记录集合，pred 进一步筛选（按组等）；
+   roundIds 为本次统计涉及的轮次（用于并入「自动打分项」的实时分）；返回带竞争排名的行数组 */
+function rankRows(rs, pred, roundIds) {
   const rows = CONFIG.candidates.map(function (c) {
     const mine = rs.filter(function (s) { return s.c === c.id && (!pred || pred(s)); });
     const detail = mine
@@ -558,7 +661,7 @@ function rankRows(rs, pred) {
     let sum = 0;
     detail.forEach(function (d) { sum += d.total; });
 
-    return {
+    const row = {
       id: c.id,
       name: c.name,
       cls: c.cls,
@@ -568,17 +671,21 @@ function rankRows(rs, pred) {
       detail: detail,
       comment: c.comment || null
     };
+    /* 并入「答题自动分」：加在面试官平均分之上。只交了卷、还没被面试官打分的人，
+       在这里也会拿到分数（avg 不再是 null），从而出现在排名里。 */
+    applyAutoTo(row, roundIds, false);
+    return row;
   });
 
-  const done = rows.filter(function (r) { return r.count > 0; })
+  const done = rows.filter(function (r) { return r.avg !== null; })
     .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
-  const todo = rows.filter(function (r) { return r.count === 0; })
+  const todo = rows.filter(function (r) { return r.avg === null; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
 
   const out = done.concat(todo);
   let last = null, lastRank = 0;
   out.forEach(function (r, i) {
-    if (r.count === 0) { r.rank = null; return; }
+    if (r.avg === null) { r.rank = null; return; }
     if (last !== null && r.avg === last) { r.rank = lastRank; }
     else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
   });
@@ -591,14 +698,14 @@ function rankOf(group, r) {
   return {
     groupId: group.id,
     groupName: group.name,
-    rows: rankRows(rs, function (s) { return s.g === group.id; })
+    rows: rankRows(rs, function (s) { return s.g === group.id; }, [r])
   };
 }
 
 /* ---------- 排名：小组只是分场面试，一轮内所有组的打分合并成一份统一排名 ---------- */
 function unifiedRank(r) {
   const rs = scores.filter(function (s) { return s.r === r; });
-  return { rows: rankRows(rs, null) };
+  return { rows: rankRows(rs, null, [r]) };
 }
 
 /* ---------- 总排名：跨所有轮次、所有小组，综合成一份总平均分排名（明细里标注每条分数来自哪一轮） ---------- */
@@ -625,7 +732,7 @@ function overallRank() {
     let sum = 0;
     detail.forEach(function (d) { sum += d.total; });
 
-    return {
+    const row = {
       id: c.id,
       name: c.name,
       cls: c.cls,
@@ -634,17 +741,20 @@ function overallRank() {
       detail: detail,
       comment: c.comment || null
     };
+    /* 总排名同样并入「答题自动分」（明细里会标注来自哪一轮） */
+    applyAutoTo(row, CONFIG.rounds.map(function (x) { return x.id; }), true);
+    return row;
   });
 
-  const done = rows.filter(function (r) { return r.count > 0; })
+  const done = rows.filter(function (r) { return r.avg !== null; })
     .sort(function (a, b) { return b.avg - a.avg || a.name.localeCompare(b.name, 'zh'); });
-  const todo = rows.filter(function (r) { return r.count === 0; })
+  const todo = rows.filter(function (r) { return r.avg === null; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, 'zh'); });
 
   const out = done.concat(todo);
   let last = null, lastRank = 0;
   out.forEach(function (r, i) {
-    if (r.count === 0) { r.rank = null; return; }
+    if (r.avg === null) { r.rank = null; return; }
     if (last !== null && r.avg === last) { r.rank = lastRank; }
     else { r.rank = i + 1; lastRank = r.rank; last = r.avg; }
   });
@@ -1231,8 +1341,24 @@ const server = http.createServer(function (req, res) {
               return json(res, 400, { error: '「' + newName + '」已经有了' });
             }
           }
-          const oldMode = dim.mode === 'free' ? 'free' : 'level';
-          const wantMode = d.mode === 'free' ? 'free' : (d.mode === 'level' ? 'level' : oldMode);
+          const oldMode = (dim.mode === 'free' || dim.mode === 'auto') ? dim.mode : 'level';
+          const wantMode = (d.mode === 'free' || d.mode === 'level' || d.mode === 'auto') ? d.mode : oldMode;
+
+          /* 自动计分型：分数由作答记录实时算出，面试官不填、也改不了。
+             存档里的旧值不删（detailOf 会跳过自动项，留着不影响；万一切回人工还能用）。 */
+          if (wantMode === 'auto') {
+            const src = str(d.source);
+            const source = (src === 'choice' || src === 'code') ? src : 'answer';
+            const max = source === 'choice' ? DRAW.choice * CHOICE_SCORE
+              : source === 'code' ? DRAW.code * CODE_SCORE
+                : DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE;
+            if (newName) dim.name = newName;
+            dim.mode = 'auto';
+            dim.source = source;
+            dim.max = max;
+            writeJSON(CONFIG_FILE, CONFIG);
+            return json(res, 200, { ok: true, dimensions: dims, rounds: CONFIG.rounds });
+          }
 
           /* 自由填分型：校验满分即可，不需要等级 */
           if (wantMode === 'free') {
