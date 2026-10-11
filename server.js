@@ -209,12 +209,16 @@ function normalize(cfg) {
     if (dm && dm.mode === 'auto') {
       /* 自动打分项：分数由系统按作答记录**实时算出**，面试官不填、也改不了。
          source: 'answer' = 选择题自动分 + 编程题人工分（默认）；
-                 'choice' / 'code' 只取其中一项。 */
+                 'choice' / 'code' 只取其中一项。
+         max：**可手动指定**（只影响"满分 N 分"的显示与 dimsMax），
+              没指定就按分值公式算。注意它是显示值，不会改变实际算出来的分。 */
       const src = str(dm.source);
       const source = (src === 'choice' || src === 'code') ? src : 'answer';
-      const max = source === 'choice' ? DRAW.choice * CHOICE_SCORE
+      const defMax = source === 'choice' ? DRAW.choice * CHOICE_SCORE
         : source === 'code' ? DRAW.code * CODE_SCORE
           : DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE;
+      const n = Number(dm.max);
+      const max = (isFinite(n) && n >= 1 && n <= 999) ? Math.round(n) : defMax;
       return { id: id, name: name, mode: 'auto', source: source, max: max };
     }
     if (dm && dm.mode === 'free') {
@@ -1349,9 +1353,19 @@ const server = http.createServer(function (req, res) {
           if (wantMode === 'auto') {
             const src = str(d.source);
             const source = (src === 'choice' || src === 'code') ? src : 'answer';
-            const max = source === 'choice' ? DRAW.choice * CHOICE_SCORE
+            const defMax = source === 'choice' ? DRAW.choice * CHOICE_SCORE
               : source === 'code' ? DRAW.code * CODE_SCORE
                 : DRAW.choice * CHOICE_SCORE + DRAW.code * CODE_SCORE;
+            /* max 可手动指定（只影响"满分 N 分"的显示）；
+               不传就沿用现有值，还没有才按分值公式算 */
+            let max = defMax;
+            if (d.max !== undefined && d.max !== null) {
+              const n = Number(d.max);
+              if (!isFinite(n) || n < 1 || n > 999) return json(res, 400, { error: '满分要填 1~999' });
+              max = Math.round(n);
+            } else if (isFinite(Number(dim.max)) && Number(dim.max) >= 1) {
+              max = Math.round(Number(dim.max));
+            }
             if (newName) dim.name = newName;
             dim.mode = 'auto';
             dim.source = source;

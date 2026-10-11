@@ -2080,28 +2080,34 @@ main{padding:8px var(--pad-x) calc(96px + env(safe-area-inset-bottom))}
   }
 
   /* 编辑已有打分项：改名称 / 类型 / 等级 */
-  /* 自动计分型：只能改名字 —— 分数由系统按作答记录实时算，不给手填 */
+  /* 自动计分型：只能改名字和「满分」显示值 —— 分数由系统按作答记录实时算，不给手填 */
   function openAutoDimEditor(dm) {
     var sheet = $('#dsheet');
     sheet.className = 'sheet stack';
     sheet.innerHTML =
       '<div class="sheet-grab"></div>' +
       '<div class="sheet-head"><div><div class="sheet-name">编辑打分项</div>' +
-      '<div class="sheet-sub">系统自动算分，不能手填</div></div></div>' +
+      '<div class="sheet-sub">系统自动算分，面试官不能手填</div></div></div>' +
       '<div class="sheet-body">' +
         '<div class="f-label">打分项名称 <em></em></div>' +
         '<input class="f-input" id="dfName" maxlength="10" value="' + esc(dm.name) + '">' +
+        '<div class="f-label" style="margin-top:14px">满分 <em>1~999</em></div>' +
+        '<input class="f-input" id="dfMax" inputmode="numeric" maxlength="3" value="' + (dm.max || '') + '">' +
         '<div class="hint" style="margin-top:14px"><span style="font-size:12.5px;color:#98a2b3">' +
-        '分数 = 选择题系统自动判分 + 编程题面试官人工分，满分 ' + (dm.max || 0) + ' 分。<br>' +
-        '实时计算：改了题目答案、改了分值、或面试官给编程题打完分，排名会立刻跟着变。</span></div>' +
+        '分数 = 选择题系统自动判分 + 编程题面试官人工分，<b>实时计算</b> —— ' +
+        '改了题目答案、改了分值、或面试官给编程题打完分，排名会立刻跟着变。<br>' +
+        '⚠️ 这里的「满分」只是<b>显示值</b>（排名页和打分弹窗上的「/ N 分」），' +
+        '<b>不会改变实际算出来的分数</b>。</span></div>' +
       '</div>' +
       '<div class="sheet-foot row"><button class="b-save" id="dfSave">保存修改</button></div>';
     showSheet('#dsheet');
     $('#dfSave').onclick = function () {
       var n = $('#dfName').value.trim();
       if (!n) { toast('名称不能为空'); return; }
+      var mx = Number($('#dfMax').value);
+      if (!isFinite(mx) || mx < 1 || mx > 999) { toast('满分要填 1~999'); return; }
       var btn = $('#dfSave'); btn.disabled = true;
-      dimManage('edit', { id: dm.id, name: n, mode: 'auto', source: dm.source || 'answer' })
+      dimManage('edit', { id: dm.id, name: n, mode: 'auto', source: dm.source || 'answer', max: Math.round(mx) })
         .then(function () { hideSheets(); })
         .catch(function () { btn.disabled = false; });
     };
