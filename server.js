@@ -160,7 +160,16 @@ function normalize(cfg) {
     cfg.rounds = [{ id: 'r1', name: '第1轮' }, { id: 'r2', name: '第2轮' }];
   } else {
     cfg.rounds = cfg.rounds.map(function (r) {
-      return { id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'), name: str(r && r.name) || '轮次' };
+      const o = {
+        id: str(r && r.id) || 'r_' + crypto.randomBytes(3).toString('hex'),
+        name: str(r && r.name) || '轮次'
+      };
+      /* ⚠️ 必须原样保留 dims（本轮考察哪些打分项）。
+         以前这里只返回 {id,name}，把 dims 丢掉了 —— 后面那段会当成"老数据没配过"，
+         于是每次重启都把各轮的考察范围重置成"当前全部打分项"，用户配过的范围全丢。
+         dims 缺失时才不带该字段，留给下面统一补全。 */
+      if (Array.isArray(r && r.dims)) o.dims = r.dims.slice();
+      return o;
     });
   }
 
